@@ -3,3 +3,30 @@
 .env
 **/.env
 *.env
+
+# CI/CD generated test reports (created at runtime, uploaded as artifacts)
+Test Results/
+Vulnerability Test Results/
+scan-outputs/
+
+# Playwright
+e2e/test-results/
+e2e/playwright-report/
+e2e/node_modules/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# VS Code
+.vscode/
+
+# Node
+node_modules/
+npm-debug.log*

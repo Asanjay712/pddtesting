@@ -1,0 +1,19 @@
+{
+  "name": "medical-ai-e2e",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for Medical AI Platform",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:report": "playwright show-report",
+    "test:auth": "playwright test tests/auth.spec.js",
+    "test:dashboard": "playwright test tests/dashboard.spec.js",
+    "test:upload": "playwright test tests/upload.spec.js",
+    "test:ci": "playwright test --reporter=html,junit,line"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

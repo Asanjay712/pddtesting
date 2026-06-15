@@ -1,0 +1,339 @@
+name: 🚀 Deploy & E2E Test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+# Required for GitHub Pages deployment and writing reports
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  actions: read
+
+# Only one Pages deployment at a time
+concurrency:
+  group: "pages-${{ github.ref }}"
+  cancel-in-progress: false
+
+env:
+  GITHUB_USERNAME: Asanjay712
+  REPO_NAME: pddtesting
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Job 1 — Build Expo Web (static export)
+  # Compiles the React Native / Expo app to a static website
+  # Output goes into frontend/dist/ → uploaded as Pages artifact
+  # ─────────────────────────────────────────────────────────────────
+  build:
+    name: 🏗️ Build Expo Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 with cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Expo CLI globally
+        run: npm install -g @expo/cli@latest
+
+      - name: Install frontend npm dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Export Expo web as static site
+        working-directory: frontend
+        env:
+          # Set base URL so all asset paths resolve correctly on GitHub Pages
+          EXPO_ROUTER_BASE_URL: /pddtesting/
+          NODE_ENV: production
+        run: |
+          npx expo export --platform web --output-dir dist
+          echo "✅ Expo web export complete"
+          ls -la dist/
+
+      - name: Add 404 fallback for SPA routing
+        run: |
+          # Copy index.html to 404.html so GitHub Pages serves the SPA for all routes
+          cp frontend/dist/index.html frontend/dist/404.html
+
+      - name: Upload Pages artifact (app only)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+      - name: Save dist for later jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-dist
+          path: frontend/dist
+          retention-days: 1
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 2 — Deploy app to GitHub Pages
+  # ─────────────────────────────────────────────────────────────────
+  deploy-app:
+    name: 🌐 Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy Expo web to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 3 — Playwright E2E Tests against live GitHub Pages URL
+  # Tests run against the DEPLOYED site — not localhost
+  # ─────────────────────────────────────────────────────────────────
+  e2e-tests:
+    name: 🧪 Playwright E2E Tests (Live Site)
+    needs: deploy-app
+    runs-on: ubuntu-latest
+    env:
+      BASE_URL: ${{ needs.deploy-app.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install E2E test dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright Chromium browser
+        working-directory: e2e
+        run: npx playwright install chromium --with-deps
+
+      - name: Wait for GitHub Pages deployment to be live
+        run: |
+          echo "🔍 Waiting for $BASE_URL to return HTTP 200..."
+          MAX_ATTEMPTS=24
+          SLEEP_SECS=15
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL" 2>/dev/null || echo "000")
+            echo "  Attempt $i/$MAX_ATTEMPTS — HTTP $STATUS"
+            if [ "$STATUS" = "200" ]; then
+              echo "✅ Site is live and ready!"
+              break
+            fi
+            if [ "$i" = "$MAX_ATTEMPTS" ]; then
+              echo "⚠️  Site may not be ready, continuing anyway..."
+            fi
+            sleep $SLEEP_SECS
+          done
+
+      - name: Run Playwright E2E tests against live site
+        working-directory: e2e
+        env:
+          BASE_URL: ${{ needs.deploy-app.outputs.page_url }}
+          CI: "true"
+          PWDEBUG: "0"
+        run: |
+          npx playwright test \
+            --reporter=html,junit,line \
+            --output=test-results
+        continue-on-error: true   # always upload reports even on failure
+
+      - name: Setup Python 3.11 for report generation
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python report dependencies
+        run: pip install openpyxl jinja2 lxml
+
+      - name: Generate Excel automation report
+        if: always()
+        run: |
+          mkdir -p "Test Results/Excel"
+          python scripts/generate_excel_report.py \
+            --junit "e2e/test-results/junit.xml" \
+            --output "Test Results/Excel/Automation_Test_Report.xlsx" \
+            --base-url "$BASE_URL"
+        continue-on-error: true
+
+      - name: Generate HTML execution report
+        if: always()
+        run: |
+          mkdir -p "Test Results/HTML"
+          python scripts/generate_html_report.py \
+            --junit "e2e/test-results/junit.xml" \
+            --screenshots-dir "e2e/test-results" \
+            --output "Test Results/HTML/execution-report.html" \
+            --base-url "$BASE_URL"
+        continue-on-error: true
+
+      - name: Generate Markdown summary report
+        if: always()
+        run: |
+          mkdir -p "Test Results/Summary"
+          python scripts/generate_summary.py \
+            --junit "e2e/test-results/junit.xml" \
+            --base-url "$BASE_URL" \
+            --repo "Asanjay712/pddtesting" \
+            --output "Test Results/Summary/summary.md"
+        continue-on-error: true
+
+      - name: Copy screenshots and logs
+        if: always()
+        run: |
+          mkdir -p "Test Results/Screenshots"
+          mkdir -p "Test Results/Logs"
+          find e2e/test-results -name "*.png" -exec cp {} "Test Results/Screenshots/" \; 2>/dev/null || true
+          find e2e/test-results -name "*.log" -exec cp {} "Test Results/Logs/" \; 2>/dev/null || true
+          find e2e/test-results -name "*.txt" -exec cp {} "Test Results/Logs/" \; 2>/dev/null || true
+
+      - name: Upload all E2E artifacts (preserved on failure)
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            Test Results/
+            e2e/playwright-report/
+            e2e/test-results/junit.xml
+          retention-days: 30
+
+      - name: Upload Playwright HTML report separately
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-html-report
+          path: e2e/playwright-report/
+          retention-days: 30
+
+      - name: Post E2E summary to GitHub Actions Step Summary
+        if: always()
+        run: |
+          if [ -f "Test Results/Summary/summary.md" ]; then
+            cat "Test Results/Summary/summary.md" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ⚠️ E2E Summary not generated" >> $GITHUB_STEP_SUMMARY
+            echo "Check the e2e-test-results artifact for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ─────────────────────────────────────────────────────────────────
+  # Job 4 — Re-deploy GitHub Pages with reports included
+  # Combines the Expo app + HTML test reports into one Pages deploy
+  # Reports accessible at: /reports/latest/execution-report.html
+  # ─────────────────────────────────────────────────────────────────
+  deploy-with-reports:
+    name: 📊 Deploy Reports to GitHub Pages
+    needs: [deploy-app, e2e-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    environment:
+      name: github-pages
+      url: ${{ steps.final-deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Expo app build
+        uses: actions/download-artifact@v4
+        with:
+          name: expo-dist
+          path: combined-site/
+
+      - name: Download E2E test results
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-test-results
+          path: test-reports-raw/
+        continue-on-error: true
+
+      - name: Download Playwright HTML report
+        uses: actions/download-artifact@v4
+        with:
+          name: playwright-html-report
+          path: playwright-report-raw/
+        continue-on-error: true
+
+      - name: Build combined site (app + reports)
+        run: |
+          # Create reports directory structure inside the site
+          mkdir -p combined-site/reports/latest
+          mkdir -p combined-site/reports/history/build-${{ github.run_number }}
+
+          # Copy HTML execution report
+          if [ -f "test-reports-raw/Test Results/HTML/execution-report.html" ]; then
+            cp "test-reports-raw/Test Results/HTML/execution-report.html" combined-site/reports/latest/
+          fi
+
+          # Copy Playwright interactive report
+          if [ -d "playwright-report-raw" ] && [ "$(ls -A playwright-report-raw)" ]; then
+            cp -r playwright-report-raw/. combined-site/reports/latest/playwright/
+          fi
+
+          # Copy screenshots
+          if [ -d "test-reports-raw/Test Results/Screenshots" ]; then
+            cp -r "test-reports-raw/Test Results/Screenshots" combined-site/reports/latest/
+          fi
+
+          # Copy summary
+          if [ -f "test-reports-raw/Test Results/Summary/summary.md" ]; then
+            cp "test-reports-raw/Test Results/Summary/summary.md" combined-site/reports/latest/
+          fi
+
+          # Archive to history
+          cp -r combined-site/reports/latest/. \
+            combined-site/reports/history/build-${{ github.run_number }}/ 2>/dev/null || true
+
+          # Keep 404.html for SPA routing
+          cp combined-site/index.html combined-site/404.html 2>/dev/null || true
+
+          echo "✅ Combined site structure:"
+          find combined-site/reports -type f | head -30
+
+      - name: Upload combined site as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: combined-site/
+
+      - name: Deploy combined site to GitHub Pages
+        id: final-deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Print live report URL
+        run: |
+          REPORT_URL="${{ steps.final-deployment.outputs.page_url }}reports/latest/execution-report.html"
+          PLAYWRIGHT_URL="${{ steps.final-deployment.outputs.page_url }}reports/latest/playwright/"
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🌐 Live App:              ${{ steps.final-deployment.outputs.page_url }}"
+          echo "📊 Execution Report:      $REPORT_URL"
+          echo "🎭 Playwright Report:     $PLAYWRIGHT_URL"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+          # Also write to Step Summary
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+
+          ## 🌐 Live URLs
+
+          | Resource | URL |
+          |---|---|
+          | **Live App** | ${{ steps.final-deployment.outputs.page_url }} |
+          | **Execution Report** | $REPORT_URL |
+          | **Playwright Report** | $PLAYWRIGHT_URL |
+          | **Build #** | ${{ github.run_number }} |
+          EOF
