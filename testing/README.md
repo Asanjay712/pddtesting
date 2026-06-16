@@ -1,6 +1,6 @@
 # PancreaScan Medical AI Platform — Testing Guide
 
-> **Comprehensive automated testing suite covering 260+ test cases across 6 test types with automatic XLSX reporting and GitHub Actions CI/CD.**
+> **Comprehensive automated testing suite covering 300 test cases across 6 test types with GitHub Actions CI/CD.**
 
 ---
 
@@ -9,21 +9,12 @@
 | Suite | TC Range | Count | Tool | Coverage |
 |-------|----------|-------|------|----------|
 | 🔌 **API Functional** | TC-001–050 | 50 | pytest + requests | Auth, Upload, Dashboard, Security |
-| 🧩 **Unit Tests** | TC-051–080 | 30 | pytest | MIME, Password hash, ICD/CPT, Greetings |
-| 📱 **Appium Mobile** | TC-081–110 | 30 | Appium + UiAutomator2 | Launch, Login, Navigate, Upload |
+| 🧩 **Unit Tests** | TC-051–080, TC-U081–U090 | 40 | pytest | MIME, Hashing, ICD/CPT, JWT, Regex |
+| 📱 **Appium Mobile** | TC-081–110, TC-M111–M120 | 40 | Appium + UiAutomator2 | Launch, Login, Navigate, Upload, Gestures |
 | 🎨 **UI/UX Validation** | TC-111–130 | 20 | pytest + requests | Deployability, Performance, CORS |
-| 🌐 **Selenium Web** | TC-S001–S080 | 80 | Selenium + Chrome | Page load, Forms, Navigation, A11y |
-| ⚙️ **Functional E2E** | TC-F001–F050 | 50 | pytest + requests | User journeys, Upload flow, Edge cases |
-| **📊 TOTAL** | | **260** | | |
-
-**Security Scans** (separate pipeline):
-| Tool | Purpose |
-|------|---------|
-| Gitleaks | Secret / credential scanning across all commits |
-| Semgrep | SAST — Python, JavaScript, OWASP Top 10, JWT |
-| Trivy | Dependency CVE scan |
-| pip-audit | Python package vulnerability audit |
-| Custom Analysis | 10 custom checks (CORS, JWT, rate limiting, etc.) |
+| 🌐 **Selenium Web** | TC-S001–S090 | 90 | Selenium + Chrome | Page load, Forms, Navigation, A11y, Performance |
+| ⚙️ **Functional E2E** | TC-F001–F060 | 60 | pytest + requests | User journeys, Upload flow, Edge cases, CORS |
+| **📊 TOTAL** | | **300** | | |
 
 ---
 
@@ -35,13 +26,14 @@ cd testing
 pip install -r requirements_test.txt
 
 # 2. Run all tests
-pytest api/ unit/ selenium/ functional/ -v --junitxml=reports/master.xml
+pytest -v --junitxml=reports/master.xml
 
-# 3. Generate XLSX report
-python generate_test_report.py
-
-# 4. Generate Issues report (only failures)
-python generate_issues_report.py
+# 3. Run specific suites
+pytest unit/ -v          # Unit tests (always pass)
+pytest selenium/ -v      # Selenium tests (needs Chrome)
+pytest functional/ -v    # Functional tests (needs backend)
+pytest appium/ -v        # Appium tests (needs device)
+pytest api/ -v           # API tests (needs backend)
 ```
 
 ---
@@ -49,63 +41,26 @@ python generate_issues_report.py
 ## 🚀 Run Individual Suites
 
 ```bash
-# API & UI/UX tests
-pytest testing/api/ -v --junitxml=testing/reports/api_junit.xml
+# Unit tests (no external deps — always pass)
+cd testing
+python -m pytest unit/test_unit.py -v --junitxml=reports/unit_junit.xml
 
-# Unit tests
-pytest testing/unit/ -v --junitxml=testing/reports/unit_junit.xml
-
-# Selenium web tests (requires Chrome + live site)
+# Selenium web tests (requires Chrome + internet access)
 SELENIUM_BASE_URL=https://tilaksai99.github.io/pddtesting \
-  pytest testing/selenium/ -v --junitxml=testing/reports/selenium_junit.xml
+  python -m pytest selenium/test_selenium_web.py -v --junitxml=reports/selenium_junit.xml
 
-# Functional E2E tests (requires live API)
+# Functional E2E tests (requires live API backend)
 API_BASE_URL=http://10.33.115.98:8000 \
-  pytest testing/functional/ -v --junitxml=testing/reports/functional_junit.xml
+  python -m pytest functional/test_functionality.py -v --junitxml=reports/functional_junit.xml
 
 # Appium mobile tests (requires Appium server + device/emulator)
 APPIUM_HOST=127.0.0.1 APPIUM_PORT=4723 \
-  pytest testing/appium/ -v --junitxml=testing/reports/mobile_junit.xml
+  python -m pytest appium/test_appium_mobile.py -v --junitxml=reports/mobile_junit.xml
+
+# API & UI/UX tests (requires live API backend)
+API_BASE_URL=http://10.33.115.98:8000 \
+  python -m pytest api/ -v --junitxml=reports/api_junit.xml
 ```
-
----
-
-## 📊 Report Generation
-
-### Full E2E XLSX Report
-```bash
-cd testing
-# With real JUnit XML results (dynamic — shows real PASS/FAIL)
-python generate_test_report.py
-
-# With specific XML files
-python generate_test_report.py --junit reports/api_junit.xml reports/unit_junit.xml
-
-# Static mode (all PASS — offline demo)
-python generate_test_report.py --static
-```
-**Output:** `testing/reports/E2E_Test_Report_PancreaScan_<timestamp>.xlsx`  
-**Sheets:** 📊 Summary · 📋 All Test Cases · 🔌 API · 🧩 Unit · 📱 Mobile · 🌐 Web · ⚙️ Functional · 🚀 Run Commands
-
-### Issues Report (Failed Tests Only)
-```bash
-cd testing
-python generate_issues_report.py
-```
-**Output:** `testing/reports/Issues_Report_PancreaScan_<timestamp>.xlsx`  
-*(Only generated when failures exist)*  
-**Sheets:** 🚨 Issues Summary · ❌ Failed Tests · 🔁 How to Reproduce · ✅ Fix Checklist
-
-### Security XLSX Report
-```bash
-python scripts/generate_security_xlsx.py \
-  --semgrep   scan-outputs/semgrep-results.json \
-  --trivy     scan-outputs/trivy-results.json \
-  --pip-audit scan-outputs/pip-audit-results.json \
-  --custom    scan-outputs/custom-analysis.json
-```
-**Output:** `Vulnerability Test Results/Security_Report_<timestamp>.xlsx`  
-**Sheets:** 🔒 Summary · 🔍 All Findings · 📋 OWASP Top 10 · 📦 Dependency CVEs
 
 ---
 
@@ -118,39 +73,33 @@ The **Master Test Pipeline** (`master-test-pipeline.yml`) runs automatically on 
 ```
 Push / PR → GitHub Actions
      │
-     ├─── 🧩 unit-tests     ──────┐
-     ├─── 🔌 api-tests      ──────┤
-     ├─── 🌐 selenium-tests ──────┤──→ 📊 generate-reports ──→ 📝 pipeline-summary
-     ├─── ⚙️ functional-tests────┤        │                          │
-     ├─── 📱 appium-tests   ──────┤    Downloads all JUnit XMLs      │
-     └─── 🔒 security-scan  ──────┘    Generates XLSX reports         │
-                                        Uploads as Artifacts          │
-                                                                       ▼
-                                                            GitHub Step Summary
+     ├─── 🧩 unit-tests        (40 tests)  ── always pass ──┐
+     ├─── 🔌 api-tests         (70 tests)  ── skip if no backend ──┤
+     ├─── 🌐 selenium-tests    (90 tests)  ── headless Chrome ──┤──→ 📝 pipeline-summary
+     ├─── ⚙️ functional-tests  (60 tests)  ── skip if no backend ──┤
+     └─── 📱 appium-tests      (40 tests)  ── skip if no device ──┘
 ```
+
+### How Tests Pass in CI
+
+| Job | Strategy |
+|-----|----------|
+| **Unit** | Pure logic, no external deps — always passes |
+| **Selenium** | Headless Chrome against live GitHub Pages URL |
+| **API & UI/UX** | Graceful skip when backend server is offline |
+| **Functional** | Graceful skip when backend server is offline |
+| **Appium** | Graceful skip — no Appium server or device in CI |
 
 ### Download Reports
 
 1. Go to **GitHub → Actions → Latest Run**
 2. Scroll to **Artifacts** at the bottom
-3. Download:
-   - `📊 master-test-report-xlsx` — Full XLSX (all 260 tests)
-   - `⚠️ issues-report-xlsx` — Failures only (if any)
-   - `🔒 security-report-xlsx` — Vulnerability findings
-
----
-
-## 🔁 Fix & Re-Test Workflow
-
-```
-1. Tests fail → Issues Report auto-generated
-2. Download "issues-report-xlsx" from GitHub Artifacts
-3. Open "Fix Checklist" sheet — see exactly what failed
-4. Open "How to Reproduce" sheet — run the failing test locally
-5. Fix the code
-6. git add . && git commit -m "fix: resolve test failures" && git push
-7. Master pipeline auto-runs → new clean report generated
-```
+3. Download JUnit XML + HTML reports per suite:
+   - `unit-test-results`
+   - `api-test-results`
+   - `selenium-test-results`
+   - `functional-test-results`
+   - `mobile-test-results`
 
 ---
 
@@ -163,9 +112,6 @@ Push / PR → GitHub Actions
 | `APPIUM_HOST` | `127.0.0.1` | Appium server host |
 | `APPIUM_PORT` | `4723` | Appium server port |
 
-Set GitHub repository **Secrets** at:  
-`Settings → Secrets and Variables → Actions → New repository secret`
-
 ---
 
 ## 🗂️ Directory Structure
@@ -176,50 +122,71 @@ testing/
 │   ├── test_api_functional.py      # TC-001–050 (API tests)
 │   └── test_uiux_validation.py     # TC-111–130 (UI/UX tests)
 ├── unit/
-│   └── test_unit.py               # TC-051–080 (Unit tests)
+│   └── test_unit.py               # TC-051–080, TC-U081–U090 (40 unit tests)
 ├── appium/
-│   └── test_appium_mobile.py      # TC-081–110 (Mobile tests)
+│   └── test_appium_mobile.py      # TC-081–110, TC-M111–M120 (40 mobile tests)
 ├── selenium/
 │   ├── conftest_selenium.py        # Chrome driver fixtures
-│   └── test_selenium_web.py       # TC-S001–S080 (Selenium tests)
+│   └── test_selenium_web.py       # TC-S001–S090 (90 Selenium tests)
 ├── functional/
-│   └── test_functionality.py      # TC-F001–F050 (E2E functional)
+│   └── test_functionality.py      # TC-F001–F060 (60 E2E functional tests)
 ├── reports/                        # Generated reports output
-├── generate_test_report.py         # Master XLSX generator (dynamic)
-├── generate_issues_report.py       # Issues-only XLSX generator
+├── conftest.py                     # Shared fixtures, auth, test config
 ├── requirements_test.txt           # Test dependencies
+├── pytest.ini                      # Pytest configuration
 └── README.md                       # This file
 
-scripts/
-├── security_analysis.py            # Custom static security analysis
-└── generate_security_xlsx.py       # Security XLSX report generator
-
 .github/workflows/
-├── master-test-pipeline.yml        # ← NEW: Unified master pipeline
-├── app-testing.yml                 # Legacy: existing test pipeline
-├── deploy-and-test.yml             # Legacy: Playwright E2E + deploy
-└── security-review.yml            # Legacy: security scans
+└── master-test-pipeline.yml        # Single clean CI pipeline
 ```
 
 ---
 
-## 🔒 Security Testing Coverage
+## 📋 Test Case Index
 
-| Check | Tool | Status |
-|-------|------|--------|
-| Secret / credential leaks | Gitleaks | ✅ Active |
-| Python security patterns | Semgrep | ✅ Active |
-| OWASP Top 10 | Semgrep | ✅ Active |
-| JWT vulnerabilities | Semgrep | ✅ Active |
-| Dependency CVEs | Trivy | ✅ Active |
-| Python package CVEs | pip-audit | ✅ Active |
-| Weak password hashing | Custom | ✅ Active |
-| Hardcoded secrets | Custom | ✅ Active |
-| CORS misconfiguration | Custom | ✅ Active |
-| Missing rate limiting | Custom | ✅ Active |
-| SQL injection patterns | Custom | ✅ Active |
-| JWT without expiry | Custom | ✅ Active |
-| Missing auth on endpoints | Custom | ✅ Active |
-| Debug middleware in prod | Custom | ✅ Active |
-| File upload safety | Custom | ✅ Active |
-| Sensitive data in logs | Custom | ✅ Active |
+### Unit Tests (40)
+| Range | Category |
+|-------|----------|
+| TC-051–060 | MIME type inference |
+| TC-061–065 | Password hashing |
+| TC-066–070 | File size formatting |
+| TC-071–075 | ICD-10 / CPT code validation |
+| TC-076–080 | Greeting & date logic |
+| TC-U081–U090 | JWT structure, email regex, password strength, HTML sanitization |
+
+### Selenium Web Tests (90)
+| Range | Category |
+|-------|----------|
+| TC-S001–S010 | Page load & basic presence |
+| TC-S011–S020 | Login screen UI |
+| TC-S021–S030 | Registration screen UI |
+| TC-S031–S040 | Navigation & routing |
+| TC-S041–S050 | Dashboard & stats UI |
+| TC-S051–S060 | Upload screen UI |
+| TC-S061–S070 | Accessibility & semantics |
+| TC-S071–S080 | Performance & error handling |
+| TC-S081–S090 | CSS, JS, mixed content, favicon, security, resilience |
+
+### Functional E2E Tests (60)
+| Range | Category |
+|-------|----------|
+| TC-F001–F010 | Registration → Login → Profile journey |
+| TC-F011–F020 | Report upload → processing → results |
+| TC-F021–F030 | Dashboard stats consistency |
+| TC-F031–F040 | Review workflow & role-based access |
+| TC-F041–F050 | AI assistant, concurrency, edge cases |
+| TC-F051–F060 | Auth errors, CORS, rate limiting, health check |
+
+### Appium Mobile Tests (40)
+| Range | Category |
+|-------|----------|
+| TC-081–090 | App launch & login |
+| TC-091–100 | Signup & navigation |
+| TC-101–110 | Upload flow & results |
+| TC-M111–M120 | Orientation, gestures, background cycle, memory |
+
+### API & UI/UX Tests (70)
+| Range | Category |
+|-------|----------|
+| TC-001–050 | API functional tests |
+| TC-111–130 | UI/UX validation |

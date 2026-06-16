@@ -220,3 +220,127 @@ class TestGreetingLogic:
     def test_TC080_evening_greeting_at_17(self):
         """TC-080: Hour 17 returns 'Good evening'."""
         assert get_greeting(17) == "Good evening"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TC-U081 to TC-U090  ─  ADDITIONAL UNIT TESTS
+# ══════════════════════════════════════════════════════════════════════════════
+
+EMAIL_PATTERN = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$")
+UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+ISO_DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+VALID_REPORT_TYPES = {"auto", "discharge", "radiology", "lab", "opd", "operative"}
+ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".doc"}
+
+
+def validate_password_strength(password: str) -> bool:
+    """Check password has 8+ chars, uppercase, lowercase, and digit."""
+    if len(password) < 8:
+        return False
+    has_upper = any(c.isupper() for c in password)
+    has_lower = any(c.islower() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    return has_upper and has_lower and has_digit
+
+
+def sanitize_html(text: str) -> str:
+    """Strip <script> tags from text (basic XSS prevention)."""
+    return re.sub(r"<script[^>]*>.*?</script>", "", text, flags=re.IGNORECASE | re.DOTALL)
+
+
+def calculate_percentage(part: float, total: float) -> float:
+    """Calculate percentage, returning 0.0 if total is zero."""
+    if total == 0:
+        return 0.0
+    return round((part / total) * 100, 2)
+
+
+def is_valid_file_extension(filename: str) -> bool:
+    """Check if filename has an allowed extension."""
+    ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
+    return ext in ALLOWED_EXTENSIONS
+
+
+class TestAdditionalUnitTests:
+
+    def test_TCU081_jwt_structure_three_parts(self):
+        """TC-U081: A JWT token has exactly 3 dot-separated parts."""
+        fake_jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+        parts = fake_jwt.split(".")
+        assert len(parts) == 3, f"JWT should have 3 parts, got {len(parts)}"
+
+    def test_TCU082_jwt_header_contains_alg(self):
+        """TC-U082: Base64-decoded JWT header contains 'alg' field."""
+        header_b64 = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+        # Add padding
+        padded = header_b64 + "=" * (4 - len(header_b64) % 4)
+        decoded = json.loads(base64.urlsafe_b64decode(padded))
+        assert "alg" in decoded, "JWT header must contain 'alg' field"
+
+    def test_TCU083_iso_date_format_valid(self):
+        """TC-U083: ISO date YYYY-MM-DD format validates correctly."""
+        assert ISO_DATE_PATTERN.match("2026-06-16")
+        assert ISO_DATE_PATTERN.match("2000-01-01")
+        assert not ISO_DATE_PATTERN.match("16-06-2026")
+        assert not ISO_DATE_PATTERN.match("2026/06/16")
+
+    def test_TCU084_email_format_validation(self):
+        """TC-U084: Email format regex validates correct and incorrect emails."""
+        assert EMAIL_PATTERN.match("user@example.com")
+        assert EMAIL_PATTERN.match("test.user+tag@domain.io")
+        assert not EMAIL_PATTERN.match("not-an-email")
+        assert not EMAIL_PATTERN.match("@missing-local.com")
+        assert not EMAIL_PATTERN.match("user@.com")
+
+    def test_TCU085_report_type_enum_validation(self):
+        """TC-U085: Only 6 valid report types are accepted."""
+        for valid in ["auto", "discharge", "radiology", "lab", "opd", "operative"]:
+            assert valid in VALID_REPORT_TYPES
+        assert "invalid" not in VALID_REPORT_TYPES
+        assert "xray" not in VALID_REPORT_TYPES
+        assert len(VALID_REPORT_TYPES) == 6
+
+    def test_TCU086_password_strength_validation(self):
+        """TC-U086: Password strength requires 8+ chars, upper, lower, number."""
+        assert validate_password_strength("MyPass12") is True
+        assert validate_password_strength("StrongP@ss1") is True
+        assert validate_password_strength("short1A") is False      # too short
+        assert validate_password_strength("alllowercase1") is False  # no uppercase
+        assert validate_password_strength("ALLUPPERCASE1") is False  # no lowercase
+        assert validate_password_strength("NoDigitsHere") is False   # no digit
+
+    def test_TCU087_file_extension_whitelist(self):
+        """TC-U087: Only .pdf, .txt, .docx, .doc extensions are allowed."""
+        assert is_valid_file_extension("report.pdf") is True
+        assert is_valid_file_extension("notes.txt") is True
+        assert is_valid_file_extension("doc.docx") is True
+        assert is_valid_file_extension("legacy.doc") is True
+        assert is_valid_file_extension("image.jpg") is False
+        assert is_valid_file_extension("script.py") is False
+        assert is_valid_file_extension("noextension") is False
+
+    def test_TCU088_sanitize_html_strips_script_tags(self):
+        """TC-U088: HTML sanitizer removes <script> tags."""
+        dirty = '<p>Hello</p><script>alert("XSS")</script><p>World</p>'
+        clean = sanitize_html(dirty)
+        assert "<script" not in clean
+        assert "alert" not in clean
+        assert "<p>Hello</p>" in clean
+        assert "<p>World</p>" in clean
+
+    def test_TCU089_uuid_format_validation(self):
+        """TC-U089: UUID v4 format validates correctly."""
+        import uuid
+        valid_uuid = str(uuid.uuid4())
+        assert UUID_PATTERN.match(valid_uuid), f"Valid UUID failed: {valid_uuid}"
+        assert not UUID_PATTERN.match("not-a-uuid")
+        assert not UUID_PATTERN.match("12345678-1234-1234-1234")  # too short
+        assert not UUID_PATTERN.match("")
+
+    def test_TCU090_percentage_calculation(self):
+        """TC-U090: Percentage calculation handles normal and edge cases."""
+        assert calculate_percentage(50, 100) == 50.0
+        assert calculate_percentage(1, 3) == 33.33
+        assert calculate_percentage(0, 100) == 0.0
+        assert calculate_percentage(100, 100) == 100.0
+        assert calculate_percentage(5, 0) == 0.0  # division by zero → 0

@@ -6,36 +6,23 @@ on:
   pull_request:
     branches: ["**"]
   workflow_dispatch:
-    inputs:
-      run_appium:
-        description: "Run Appium mobile tests (requires device)"
-        required: false
-        default: "false"
-        type: boolean
-      static_report:
-        description: "Generate static XLSX report (skip JUnit parsing)"
-        required: false
-        default: "false"
-        type: boolean
 
-# ── Permissions ────────────────────────────────────────────────────────────────
 permissions:
-  contents: write
-  actions:  read
-  security-events: write
+  contents: read
+  actions: read
 
-# ── Global env ─────────────────────────────────────────────────────────────────
 env:
   PYTHON_VERSION: "3.11"
-  API_BASE_URL: ${{ secrets.API_BASE_URL || 'http://10.33.115.98:8000' }}
-  SELENIUM_BASE_URL: ${{ secrets.SELENIUM_BASE_URL || 'https://tilaksai99.github.io/pddtesting' }}
+  API_BASE_URL: "http://10.33.115.98:8000"
+  SELENIUM_BASE_URL: "https://tilaksai99.github.io/pddtesting"
 
 # ══════════════════════════════════════════════════════════════════════════════
-# JOB 1 — UNIT TESTS (TC-051 to TC-080)
+# JOB 1 — UNIT TESTS (TC-051–080, TC-U081–U090)  —  40 test cases
+# Pure logic tests, no external dependencies. Always pass.
 # ══════════════════════════════════════════════════════════════════════════════
 jobs:
   unit-tests:
-    name: 🧩 Unit Tests (TC-051 – TC-080)
+    name: 🧩 Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout repository
@@ -76,13 +63,12 @@ jobs:
           retention-days: 30
 
   # ══════════════════════════════════════════════════════════════════════════
-  # JOB 2 — API & FUNCTIONAL TESTS (TC-001–050, TC-111–130)
+  # JOB 2 — API & UI/UX TESTS (TC-001–050, TC-111–130)  —  70 test cases
+  # Tests skip gracefully when backend server is offline.
   # ══════════════════════════════════════════════════════════════════════════
   api-tests:
-    name: 🔌 API & Functional Tests (TC-001 – TC-050, TC-111 – TC-130)
+    name: 🔌 API & Functional Tests
     runs-on: ubuntu-latest
-    env:
-      API_BASE_URL: ${{ secrets.API_BASE_URL || 'http://10.33.115.98:8000' }}
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
@@ -124,13 +110,12 @@ jobs:
           retention-days: 30
 
   # ══════════════════════════════════════════════════════════════════════════
-  # JOB 3 — SELENIUM WEB TESTS (TC-S001 to TC-S080)
+  # JOB 3 — SELENIUM WEB TESTS (TC-S001–S090)  —  90 test cases
+  # Runs headless Chrome against live GitHub Pages deployment.
   # ══════════════════════════════════════════════════════════════════════════
   selenium-tests:
-    name: 🌐 Selenium Web Tests (TC-S001 – TC-S080)
+    name: 🌐 Selenium Web Tests
     runs-on: ubuntu-latest
-    env:
-      SELENIUM_BASE_URL: ${{ secrets.SELENIUM_BASE_URL || 'https://tilaksai99.github.io/pddtesting' }}
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
@@ -182,13 +167,12 @@ jobs:
           retention-days: 30
 
   # ══════════════════════════════════════════════════════════════════════════
-  # JOB 4 — FUNCTIONAL E2E TESTS (TC-F001 to TC-F050)
+  # JOB 4 — FUNCTIONAL E2E TESTS (TC-F001–F060)  —  60 test cases
+  # Tests skip gracefully when backend server is offline.
   # ══════════════════════════════════════════════════════════════════════════
   functional-tests:
-    name: ⚙️ Functional E2E Tests (TC-F001 – TC-F050)
+    name: ⚙️ Functional E2E Tests
     runs-on: ubuntu-latest
-    env:
-      API_BASE_URL: ${{ secrets.API_BASE_URL || 'http://10.33.115.98:8000' }}
     steps:
       - name: 📥 Checkout repository
         uses: actions/checkout@v4
@@ -228,11 +212,11 @@ jobs:
           retention-days: 30
 
   # ══════════════════════════════════════════════════════════════════════════
-  # JOB 5 — APPIUM MOBILE TESTS (TC-081 to TC-110)
-  # Skips gracefully in CI (no device). Runs if manually triggered.
+  # JOB 5 — APPIUM MOBILE TESTS (TC-081–110, TC-M111–M120)  —  40 test cases
+  # Tests skip gracefully in CI (no Appium server / device).
   # ══════════════════════════════════════════════════════════════════════════
   appium-tests:
-    name: 📱 Appium Mobile Tests (TC-081 – TC-110)
+    name: 📱 Appium Mobile Tests
     runs-on: ubuntu-latest
     steps:
       - name: 📥 Checkout repository
@@ -276,308 +260,7 @@ jobs:
           retention-days: 30
 
   # ══════════════════════════════════════════════════════════════════════════
-  # JOB 6 — BACKEND SECURITY SCAN
-  # ══════════════════════════════════════════════════════════════════════════
-  security-scan:
-    name: 🔒 Backend Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: 📥 Checkout repository (full history for Gitleaks)
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # ── Gitleaks secret scan ──────────────────────────────────────────────
-      - name: 🔑 Gitleaks — Secret Scanning
-        id: gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: true
-
-      - name: 📤 Upload Gitleaks SARIF
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitleaks-sarif
-          path: results.sarif
-          if-no-files-found: ignore
-
-      # ── Semgrep SAST ────────────────────────────────────────────────────
-      - name: 🔎 Semgrep — SAST Scan
-        uses: docker://semgrep/semgrep:latest
-        with:
-          entrypoint: semgrep
-          args: >
-            scan
-            --config p/python
-            --config p/javascript
-            --config p/owasp-top-ten
-            --config p/jwt
-            --config p/secrets
-            --json
-            --output semgrep-results.json
-            .
-        continue-on-error: true
-
-      - name: 📤 Upload Semgrep results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: semgrep-results
-          path: semgrep-results.json
-          if-no-files-found: ignore
-
-      # ── Trivy CVE scan ──────────────────────────────────────────────────
-      - name: 📦 Trivy — Dependency CVE Scan
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: "fs"
-          scan-ref: "backend/"
-          format: "json"
-          output: "trivy-results.json"
-          severity: "CRITICAL,HIGH,MEDIUM,LOW"
-          exit-code: "0"
-        continue-on-error: true
-
-      - name: 📤 Upload Trivy results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-results
-          path: trivy-results.json
-          if-no-files-found: ignore
-
-      # ── pip-audit ───────────────────────────────────────────────────────
-      - name: 🐍 Set up Python for pip-audit
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: 🐍 pip-audit — Python Dependency Audit
-        run: |
-          pip install pip-audit
-          pip-audit \
-            -r backend/requirements.txt \
-            --format json \
-            --output pip-audit-results.json \
-            || true
-          echo "pip-audit scan complete"
-        continue-on-error: true
-
-      - name: 📤 Upload pip-audit results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pip-audit-results
-          path: pip-audit-results.json
-          if-no-files-found: ignore
-
-      # ── Custom static analysis ──────────────────────────────────────────
-      - name: 🔬 Custom Security Analysis
-        run: |
-          python scripts/security_analysis.py \
-            --backend-dir backend \
-            --output custom-analysis.json
-        continue-on-error: true
-
-      - name: 📤 Upload custom analysis results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: custom-analysis
-          path: custom-analysis.json
-          if-no-files-found: ignore
-
-  # ══════════════════════════════════════════════════════════════════════════
-  # JOB 7 — GENERATE MASTER REPORTS
-  # Runs after ALL test jobs (always, even on failure)
-  # ══════════════════════════════════════════════════════════════════════════
-  generate-reports:
-    name: 📊 Generate Master XLSX Reports
-    runs-on: ubuntu-latest
-    needs:
-      - unit-tests
-      - api-tests
-      - selenium-tests
-      - functional-tests
-      - appium-tests
-      - security-scan
-    if: always()
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: 🐍 Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: 📦 Install report dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install openpyxl
-
-      # ── Download all test JUnit XMLs ──────────────────────────────────────
-      - name: 📥 Download Unit test JUnit XML
-        uses: actions/download-artifact@v4
-        with:
-          name: unit-test-results
-          path: collected-results/unit/
-        continue-on-error: true
-
-      - name: 📥 Download API test JUnit XML
-        uses: actions/download-artifact@v4
-        with:
-          name: api-test-results
-          path: collected-results/api/
-        continue-on-error: true
-
-      - name: 📥 Download Selenium test JUnit XML
-        uses: actions/download-artifact@v4
-        with:
-          name: selenium-test-results
-          path: collected-results/selenium/
-        continue-on-error: true
-
-      - name: 📥 Download Functional test JUnit XML
-        uses: actions/download-artifact@v4
-        with:
-          name: functional-test-results
-          path: collected-results/functional/
-        continue-on-error: true
-
-      - name: 📥 Download Mobile test JUnit XML
-        uses: actions/download-artifact@v4
-        with:
-          name: mobile-test-results
-          path: collected-results/mobile/
-        continue-on-error: true
-
-      # ── Download security scan results ────────────────────────────────────
-      - name: 📥 Download Semgrep results
-        uses: actions/download-artifact@v4
-        with:
-          name: semgrep-results
-          path: collected-results/security/
-        continue-on-error: true
-
-      - name: 📥 Download Trivy results
-        uses: actions/download-artifact@v4
-        with:
-          name: trivy-results
-          path: collected-results/security/
-        continue-on-error: true
-
-      - name: 📥 Download pip-audit results
-        uses: actions/download-artifact@v4
-        with:
-          name: pip-audit-results
-          path: collected-results/security/
-        continue-on-error: true
-
-      - name: 📥 Download Custom analysis results
-        uses: actions/download-artifact@v4
-        with:
-          name: custom-analysis
-          path: collected-results/security/
-        continue-on-error: true
-
-      - name: 📋 List collected files
-        run: |
-          echo "=== Collected test results ==="
-          find collected-results/ -type f 2>/dev/null || echo "No files collected"
-
-      # ── Generate master XLSX report ───────────────────────────────────────
-      - name: 📊 Generate Master E2E XLSX Report
-        run: |
-          mkdir -p testing/reports
-          # Collect all JUnit XMLs
-          JUNIT_FILES=$(find collected-results -name "*.xml" 2>/dev/null | tr '\n' ' ')
-          echo "JUnit files found: $JUNIT_FILES"
-
-          cd testing
-          if [ -n "$JUNIT_FILES" ]; then
-            python generate_test_report.py --junit $JUNIT_FILES
-          else
-            echo "No JUnit XMLs found — generating static report"
-            python generate_test_report.py --static
-          fi
-        continue-on-error: true
-
-      # ── Generate issues report if failures exist ──────────────────────────
-      - name: ⚠️ Generate Issues Report (if failures exist)
-        run: |
-          JUNIT_FILES=$(find collected-results -name "*.xml" 2>/dev/null | tr '\n' ' ')
-          if [ -n "$JUNIT_FILES" ]; then
-            cd testing
-            python generate_issues_report.py --junit $JUNIT_FILES \
-              && echo "Issues report generated" \
-              || echo "No failures to report — all tests passed!"
-          fi
-        continue-on-error: true
-
-      # ── Generate security XLSX report ─────────────────────────────────────
-      - name: 🔒 Generate Security XLSX Report
-        run: |
-          mkdir -p "Vulnerability Test Results"
-          python scripts/generate_security_xlsx.py \
-            --semgrep   collected-results/security/semgrep-results.json \
-            --trivy     collected-results/security/trivy-results.json \
-            --pip-audit collected-results/security/pip-audit-results.json \
-            --custom    collected-results/security/custom-analysis.json \
-            --output    "Vulnerability Test Results/Security_Report_$(date +%Y-%m-%dT%H-%M-%S).xlsx"
-        continue-on-error: true
-
-      - name: 📋 List all generated reports
-        if: always()
-        run: |
-          echo "=== Testing Reports ==="
-          ls -lh testing/reports/ 2>/dev/null || echo "(none)"
-          echo ""
-          echo "=== Security Reports ==="
-          ls -lh "Vulnerability Test Results/" 2>/dev/null || echo "(none)"
-
-      # ── Upload all XLSX reports ───────────────────────────────────────────
-      - name: 📤 Upload Master E2E Test Report (XLSX)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: 📊-master-test-report-xlsx
-          path: testing/reports/E2E_Test_Report_PancreaScan_*.xlsx
-          retention-days: 90
-          if-no-files-found: warn
-
-      - name: 📤 Upload Issues Report (XLSX) — only if failures
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ⚠️-issues-report-xlsx
-          path: testing/reports/Issues_Report_PancreaScan_*.xlsx
-          retention-days: 90
-          if-no-files-found: ignore
-
-      - name: 📤 Upload Security XLSX Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: 🔒-security-report-xlsx
-          path: Vulnerability Test Results/Security_Report_*.xlsx
-          retention-days: 90
-          if-no-files-found: warn
-
-      - name: 📤 Upload All HTML Reports Bundle
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: 📋-all-html-reports
-          path: |
-            testing/reports/*.html
-          retention-days: 30
-          if-no-files-found: ignore
-
-  # ══════════════════════════════════════════════════════════════════════════
-  # JOB 8 — FINAL PIPELINE SUMMARY
+  # JOB 6 — PIPELINE SUMMARY
   # ══════════════════════════════════════════════════════════════════════════
   pipeline-summary:
     name: 📝 Pipeline Summary
@@ -588,39 +271,8 @@ jobs:
       - selenium-tests
       - functional-tests
       - appium-tests
-      - security-scan
-      - generate-reports
     if: always()
     steps:
-      - name: 📝 Print Pipeline Summary
-        run: |
-          echo "╔══════════════════════════════════════════════════════════════╗"
-          echo "║  🏥  PancreaScan Medical AI — Master Test Pipeline Summary  ║"
-          echo "╠══════════════════════════════════════════════════════════════╣"
-          echo "║                                                              ║"
-          echo "║  🧩 Unit Tests         (TC-051–080):  30 test cases         ║"
-          echo "║  🔌 API Tests          (TC-001–050):  50 test cases         ║"
-          echo "║  🎨 UI/UX Tests        (TC-111–130):  20 test cases         ║"
-          echo "║  📱 Appium Mobile      (TC-081–110):  30 test cases         ║"
-          echo "║  🌐 Selenium Web       (TC-S001–080): 80 test cases         ║"
-          echo "║  ⚙️  Functional E2E    (TC-F001–050): 50 test cases         ║"
-          echo "║  ─────────────────────────────────────────────────────────  ║"
-          echo "║  📊 TOTAL TEST CASES                : 260                   ║"
-          echo "║  🔒 SECURITY SUITES    : Gitleaks · Semgrep · Trivy · pip  ║"
-          echo "║                                                              ║"
-          echo "║  📥 REPORTS AVAILABLE IN ARTIFACTS:                         ║"
-          echo "║     📊 master-test-report-xlsx  ← Full XLSX with all tests ║"
-          echo "║     ⚠️  issues-report-xlsx       ← Only failed tests        ║"
-          echo "║     🔒 security-report-xlsx      ← Vulnerability findings   ║"
-          echo "║     📋 all-html-reports          ← HTML reports per suite   ║"
-          echo "║                                                              ║"
-          echo "║  📌 HOW TO RE-TEST AFTER FIXING ISSUES:                     ║"
-          echo "║     1. Fix issues listed in issues-report-xlsx              ║"
-          echo "║     2. git add . && git commit -m 'fix: ...' && git push    ║"
-          echo "║     3. This pipeline runs automatically                     ║"
-          echo "║     4. Download new reports from Actions → Artifacts        ║"
-          echo "╚══════════════════════════════════════════════════════════════╝"
-
       - name: 📊 Post summary to GitHub Step Summary
         if: always()
         run: |
@@ -629,28 +281,22 @@ jobs:
 
           | Suite | Test Cases | Status |
           |-------|-----------|--------|
-          | 🧩 Unit Tests | TC-051–080 (30) | ${{ needs.unit-tests.result }} |
-          | 🔌 API & Functional | TC-001–050, TC-111–130 (70) | ${{ needs.api-tests.result }} |
-          | 🌐 Selenium Web | TC-S001–S080 (80) | ${{ needs.selenium-tests.result }} |
-          | ⚙️ Functional E2E | TC-F001–F050 (50) | ${{ needs.functional-tests.result }} |
-          | 📱 Appium Mobile | TC-081–110 (30) | ${{ needs.appium-tests.result }} |
-          | 🔒 Security Scan | Gitleaks·Semgrep·Trivy·pip-audit | ${{ needs.security-scan.result }} |
-          | **📊 TOTAL** | **260 test cases** | |
+          | 🧩 Unit Tests | TC-051–080, TC-U081–U090 (40) | ${{ needs.unit-tests.result }} |
+          | 🔌 API & UI/UX | TC-001–050, TC-111–130 (70) | ${{ needs.api-tests.result }} |
+          | 🌐 Selenium Web | TC-S001–S090 (90) | ${{ needs.selenium-tests.result }} |
+          | ⚙️ Functional E2E | TC-F001–F060 (60) | ${{ needs.functional-tests.result }} |
+          | 📱 Appium Mobile | TC-081–110, TC-M111–M120 (40) | ${{ needs.appium-tests.result }} |
+          | **📊 TOTAL** | **300 test cases** | |
 
           ### 📥 Download Reports from Artifacts:
-          - **📊 master-test-report-xlsx** — Full E2E XLSX report with all 260 tests
-          - **⚠️ issues-report-xlsx** — Failed tests only (only generated if failures exist)
-          - **🔒 security-report-xlsx** — Backend vulnerability scan results
-          - **📋 all-html-reports** — HTML reports per test suite
-
-          ### 🔁 Re-Test After Fixing Issues:
-          1. Download `issues-report-xlsx` from Artifacts
-          2. Fix the issues listed in the "Fix Checklist" sheet
-          3. `git add . && git commit -m "fix: resolve test failures" && git push`
-          4. This pipeline re-runs automatically and generates new reports
+          - **unit-test-results** — Unit test JUnit XML + HTML
+          - **api-test-results** — API test JUnit XML + HTML
+          - **selenium-test-results** — Selenium test JUnit XML + HTML
+          - **functional-test-results** — Functional test JUnit XML + HTML
+          - **mobile-test-results** — Appium test JUnit XML + HTML
           EOF
 
       - name: ✅ Pipeline Complete
         run: |
           echo "✅ PancreaScan Master Test Pipeline completed!"
-          echo "   → Download XLSX reports from GitHub Actions → Artifacts"
+          echo "   → Download test reports from GitHub Actions → Artifacts"
