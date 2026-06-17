@@ -7,6 +7,7 @@ from sqlalchemy import text
 import uuid
 import hashlib
 import logging
+import re
 
 from backend.utils.auth import create_token, verify_token
 from backend.utils.email import generate_otp, store_otp, verify_otp, send_otp_email
@@ -91,12 +92,36 @@ def _build_user_response(user_dict) -> dict:
 # Routes
 # ------------------------------------------------------------
 
+def is_valid_email(email: str) -> bool:
+    regex = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+    return bool(re.match(regex, email))
+
+
 @router.post("/register")
 async def register(body: RegisterRequest, db: Session = Depends(get_db)):
+    if not body.name or not body.name.strip():
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+    if not body.email or not body.email.strip():
+        raise HTTPException(status_code=400, detail="Email cannot be empty")
+    if not body.password or not body.password.strip():
+        raise HTTPException(status_code=400, detail="Password cannot be empty")
+
+    if len(body.name) > 255:
+        raise HTTPException(status_code=400, detail="Name must be 255 characters or less")
+    if len(body.email) > 255:
+        raise HTTPException(status_code=400, detail="Email must be 255 characters or less")
+    if len(body.password) > 255:
+        raise HTTPException(status_code=400, detail="Password must be 255 characters or less")
+    if body.phone and len(body.phone) > 50:
+        raise HTTPException(status_code=400, detail="Phone must be 50 characters or less")
+
+    if not is_valid_email(body.email.strip()):
+        raise HTTPException(status_code=400, detail="Invalid email format")
+
     try:
         existing = db.execute(
             text("SELECT id FROM users WHERE email = :email"),
-            {"email": body.email.lower()}
+            {"email": body.email.lower().strip()}
         ).fetchone()
         if existing:
             raise HTTPException(status_code=400, detail="Email already registered")
@@ -224,6 +249,22 @@ async def update_profile(
             value = body_dict.get(frontend_key)
             if value is not None:
                 updates[db_column] = value.strip() if isinstance(value, str) else value
+
+        # Validate lengths to avoid database 500 errors
+        if updates.get("name") and len(updates["name"]) > 255:
+            raise HTTPException(status_code=400, detail="Name must be 255 characters or less")
+        if updates.get("phone") and len(updates["phone"]) > 50:
+            raise HTTPException(status_code=400, detail="Phone must be 50 characters or less")
+        if updates.get("age") and len(updates["age"]) > 10:
+            raise HTTPException(status_code=400, detail="Age must be 10 characters or less")
+        if updates.get("organization") and len(updates["organization"]) > 255:
+            raise HTTPException(status_code=400, detail="Organization must be 255 characters or less")
+        if updates.get("department") and len(updates["department"]) > 255:
+            raise HTTPException(status_code=400, detail="Department must be 255 characters or less")
+        if updates.get("role") and len(updates["role"]) > 255:
+            raise HTTPException(status_code=400, detail="Role must be 255 characters or less")
+        if updates.get("work_email") and len(updates["work_email"]) > 255:
+            raise HTTPException(status_code=400, detail="Work email must be 255 characters or less")
 
         if not updates:
             return {"success": True, "message": "Nothing to update"}

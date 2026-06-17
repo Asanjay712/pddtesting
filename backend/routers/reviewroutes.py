@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.database import PendingCodeReview
 from backend.neo4j_writer import push_approved_code
+from backend.utils.auth import verify_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -92,6 +93,7 @@ def _row_to_out(row: PendingCodeReview) -> ReviewOut:
 def list_pending_reviews(
     report_id: Optional[str] = None,
     db: Session = Depends(get_db),
+    token: dict = Depends(verify_token),
 ):
     """
     Returns all pending reviews, optionally filtered to a single report.
@@ -105,7 +107,7 @@ def list_pending_reviews(
 
 
 @router.get("/reviews/{review_id}", response_model=ReviewOut)
-def get_review(review_id: str, db: Session = Depends(get_db)):
+def get_review(review_id: str, db: Session = Depends(get_db), token: dict = Depends(verify_token)):
     """Returns a single review item by ID."""
     row = db.query(PendingCodeReview).filter(PendingCodeReview.id == review_id).first()
     if not row:
@@ -114,10 +116,12 @@ def get_review(review_id: str, db: Session = Depends(get_db)):
 
 
 @router.patch("/reviews/{review_id}/approve")
+@router.post("/reviews/{review_id}/approve")
 def approve_review(
     review_id: str,
     body: ApproveRequest,
     db: Session = Depends(get_db),
+    token: dict = Depends(verify_token),
 ):
     """
     Human approves an AI suggestion (optionally editing the code first).
@@ -184,10 +188,12 @@ def approve_review(
 
 
 @router.patch("/reviews/{review_id}/reject")
+@router.post("/reviews/{review_id}/reject")
 def reject_review(
     review_id: str,
     body: RejectRequest,
     db: Session = Depends(get_db),
+    token: dict = Depends(verify_token),
 ):
     """
     Human rejects an AI suggestion.
@@ -218,7 +224,7 @@ def reject_review(
 
 
 @router.get("/reports/{report_id}/reviews", response_model=List[ReviewOut])
-def get_reviews_for_report(report_id: str, db: Session = Depends(get_db)):
+def get_reviews_for_report(report_id: str, db: Session = Depends(get_db), token: dict = Depends(verify_token)):
     """
     Returns ALL reviews (pending + approved + rejected) for a specific report.
     Frontend uses this on the report detail screen to show the full AI review history.

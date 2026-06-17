@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import { getToken } from './api';
 import { TabBar } from './dashboard';
 
-const BASE_URL = 'http://10.33.115.98:8000/api';
+const BASE_URL = 'http://10.135.142.53:8000/api';
 
 
 const TYPE_FILTERS = ['All', 'Discharge Summary', 'Radiology', 'Lab Report', 'OPD Notes', 'Operative Notes'];

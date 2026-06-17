@@ -1,0 +1,13 @@
+{
+  "name": "pancreascan-appium-node",
+  "version": "1.0.0",
+  "description": "Appium E2E Mobile Testing Suite in Node.js",
+  "main": "test_appium_mobile.js",
+  "scripts": {
+    "test": "node test_appium_mobile.js"
+  },
+  "dependencies": {
+    "webdriverio": "^8.39.0",
+    "dotenv": "^16.4.5"
+  }
+}

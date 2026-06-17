@@ -18,7 +18,7 @@ import os
 import uuid
 import socket
 
-BASE_API = os.getenv("API_BASE_URL", "http://10.33.115.98:8000")
+BASE_API = os.getenv("API_BASE_URL", "http://10.135.142.53:8000")
 AUTH_URL  = f"{BASE_API}/api/auth"
 API_URL   = f"{BASE_API}/api"
 

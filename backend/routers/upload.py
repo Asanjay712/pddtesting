@@ -21,7 +21,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from backend.database import get_db, Report
-from backend.utils.auth import SECRET_KEY, ALGORITHM
+from backend.utils.auth import SECRET_KEY, ALGORITHM, verify_token
 from .extractionlayer import MedicalReportExtractor
 from .normalizationlayer import MedicalNormalizer
 from .graphlayer import MedicalKnowledgeGraph
@@ -55,19 +55,13 @@ GENERIC_CONTENT_TYPES = {
 # and store/load the resolved alert-id list there instead.
 _RESOLVED_ALERT_IDS: set = set()
 
-security = HTTPBearer(auto_error=False)
-
-def get_current_user_id_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[str]:
-    if not credentials:
-        return None
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("user_id")
-    except JWTError:
-        return None
+def get_current_user_id(
+    token: dict = Depends(verify_token),
+) -> str:
+    user_id = token.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token: user_id missing")
+    return user_id
 
 
 from pydantic import BaseModel
@@ -132,7 +126,7 @@ async def upload_medical_report(
     file: UploadFile = File(...),
     report_type: str = Form("auto"),
     db: Session = Depends(get_db),
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    user_id: str = Depends(get_current_user_id),
 ):
     safe_filename     = (file.filename     or "unknown").strip()
     safe_content_type = (file.content_type or "").strip()
@@ -281,8 +275,9 @@ async def get_report_results(report_id: str, db: Session = Depends(get_db)):
 
 @router.get("/reports/history")
 async def get_reports_history(
+    limit: Optional[int] = None,
     db: Session = Depends(get_db),
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Returns every processed report for the logged-in user (or all reports if
@@ -292,7 +287,10 @@ async def get_reports_history(
     query = db.query(Report)
     if user_id:
         query = query.filter(Report.user_id == user_id)
-    reports = query.order_by(Report.created_at.desc()).all()
+    query = query.order_by(Report.created_at.desc())
+    if limit is not None:
+        query = query.limit(limit)
+    reports = query.all()
 
     history = []
     for r in reports:
@@ -326,7 +324,7 @@ async def get_reports_history(
 @router.get("/reports/alerts")
 async def get_reports_alerts(
     db: Session = Depends(get_db),
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Flattens clinical_alerts + insurance_flags from every report's
@@ -397,7 +395,7 @@ async def resolve_alert(alert_id: str):
 @router.get("/reports/stats")
 async def get_dashboard_stats(
     db: Session = Depends(get_db),
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Returns stat card data for the Dashboard screen:
@@ -454,7 +452,7 @@ async def get_dashboard_stats(
 @router.get("/reports/user-stats")
 async def get_user_stats(
     db: Session = Depends(get_db),
-    user_id: Optional[str] = Depends(get_current_user_id_optional),
+    user_id: str = Depends(get_current_user_id),
 ):
     """
     Returns this-month activity for the Profile screen:
@@ -525,4 +523,4 @@ async def flag_report_for_review(
     return {
         "status":  "success",
         "message": f"Report successfully flagged for review. Reason: {body.reason}",
-    }
+    } 

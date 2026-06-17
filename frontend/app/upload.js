@@ -19,7 +19,7 @@ const REPORT_TYPES = [
   { key: 'operative',  label: 'Operative Notes',    icon: 'medkit-outline' },
 ];
 
-const BASE_URL = 'http://10.33.115.98:8000/api';
+const BASE_URL = 'http://10.135.142.53:8000/api';
 
 // ─── Platform-aware FormData file append ─────────────────────────────────────
 //

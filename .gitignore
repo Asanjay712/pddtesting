@@ -30,3 +30,6 @@ __pycache__/
 # Node
 node_modules/
 npm-debug.log*
+*.log
+backend.log
+

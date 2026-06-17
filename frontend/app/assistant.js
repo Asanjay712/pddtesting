@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { getToken } from './api';
 
-const BASE_URL = 'http://10.33.115.98:8000/api';
+const BASE_URL = 'http://10.135.142.53:8000/api';
 
 const WELCOME_MSG = {
   id:   '0',
