@@ -52,7 +52,7 @@ jobs:
           nohup uvicorn backend.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
           # Wait for server to start
           sleep 5
-          curl -I http://127.0.0.1:8000/
+          curl -I http://127.0.0.1:8000/ || (cat backend.log && exit 1)
 
       - name: 🌐 Setup Chrome and Chromedriver
         uses: browser-actions/setup-chrome@v1
@@ -70,7 +70,7 @@ jobs:
           # Serve the compiled dist directory on port 8081
           nohup python3 -m http.server 8081 --directory frontend/dist > web_server.log 2>&1 &
           sleep 3
-          curl -I http://localhost:8081/
+          curl -I http://localhost:8081/ || (cat web_server.log && exit 1)
 
       - name: 🧪 Run pytest Test Suite
         env:
