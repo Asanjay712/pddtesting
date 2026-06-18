@@ -90,11 +90,25 @@ jobs:
         run: |
           PYTHONPATH=. python testing/generate_test_report.py --junit testing/reports/master_junit.xml
 
-      - name: 📤 Upload Excel Report as Artifact
+      - name: 📤 Upload Functional & API Report
         uses: actions/upload-artifact@v4
         with:
           name: medicalappfunctiionality testing
           path: testing/reports/medicalappfunctiionality_testing.xlsx
+          retention-days: 30
+
+      - name: 📤 Upload Selenium Web Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: seleniumtesting report
+          path: testing/reports/seleniumtesting.xlsx
+          retention-days: 30
+
+      - name: 📤 Upload Appium Mobile Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: appiumtesting report
+          path: testing/reports/appiumtesting.xlsx
           retention-days: 30
 
       - name: 📝 Post Step Summary

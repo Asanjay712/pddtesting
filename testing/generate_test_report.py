@@ -448,7 +448,7 @@ def _align(h="left", v="center", wrap=False):
 # SHEET BUILDERS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def build_summary_sheet(wb, test_results: list, now: str):
+def build_summary_sheet(wb, test_results: list, now: str, title: str = "🏥  medicalapptesting Medical AI Platform — Master E2E Test Report", suites_str: str = "API · Unit · Mobile · Web · Functional · Security"):
     """test_results: list of (tc_id, name, layer, type, desc, status, message)"""
     ws = wb.create_sheet("📊 Summary")
     ws.sheet_view.showGridLines = False
@@ -462,7 +462,7 @@ def build_summary_sheet(wb, test_results: list, now: str):
 
     # Title
     ws.merge_cells("A1:I1")
-    ws["A1"] = "🏥  medicalapptesting Medical AI Platform — Master E2E Test Report"
+    ws["A1"] = title
     ws["A1"].font      = Font(bold=True, color=WHITE, size=18, name="Calibri")
     ws["A1"].fill      = _fill(BLUE_DARK)
     ws["A1"].alignment = _align("center")
@@ -470,7 +470,7 @@ def build_summary_sheet(wb, test_results: list, now: str):
 
     ws.merge_cells("A2:I2")
     ws["A2"] = (f"Generated: {now}   |   Framework: Selenium + Appium + pytest   |"
-                f"   Suites: API · Unit · Mobile · Web · Functional · Security")
+                f"   Suites: {suites_str}")
     ws["A2"].font      = Font(color=BLUE_LIGHT, size=10, name="Calibri")
     ws["A2"].fill      = _fill(BLUE_MED)
     ws["A2"].alignment = _align("center")
@@ -552,14 +552,14 @@ def build_summary_sheet(wb, test_results: list, now: str):
     ws.column_dimensions["A"].width = 25
 
 
-def build_all_tests_sheet(wb, test_results: list):
+def build_all_tests_sheet(wb, test_results: list, title_prefix: str = "medicalapptesting — Complete Test Case Register"):
     ws = wb.create_sheet("📋 All Test Cases")
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = "A3"
 
     total = len(test_results)
     ws.merge_cells("A1:H1")
-    ws["A1"] = f"medicalapptesting — Complete Test Case Register ({total} Test Cases)"
+    ws["A1"] = f"{title_prefix} ({total} Test Cases)"
     ws["A1"].font = _font(bold=True, size=14)
     ws["A1"].fill = _fill(BLUE_DARK)
     ws["A1"].alignment = _align("center")
@@ -780,33 +780,47 @@ def generate_report(
                 status, message = _match_tc_status(tc_id, name, junit_results)
         test_results.append((tc_id, name, layer, ttype, desc, status, message))
 
-    # Stats
-    total   = len(test_results)
-    passed  = sum(1 for r in test_results if r[5] == "PASS")
-    failed  = sum(1 for r in test_results if r[5] == "FAIL")
-    errors  = sum(1 for r in test_results if r[5] == "ERROR")
-    skipped = sum(1 for r in test_results if r[5] == "SKIP")
+    # Filter subsets
+    functional_results = [r for r in test_results if r[2].lower() in ("api", "unit", "functional")]
+    selenium_results = [r for r in test_results if r[2].lower() == "web"]
+    mobile_results_list = [r for r in test_results if r[2].lower() == "mobile"]
 
-    # ── Build full XLSX report ──────────────────────────────────────────────
-    full_path = out_dir / "medicalappfunctiionality_testing.xlsx"
-    wb = Workbook()
-    if "Sheet" in wb.sheetnames:
-        del wb["Sheet"]
+    # ── Helper to save sub-reports ──────────────────────────────────────────
+    def save_sub_report(filename, subset_results, title, suites_str, title_prefix):
+        sub_path = out_dir / filename
+        sub_wb = Workbook()
+        if "Sheet" in sub_wb.sheetnames:
+            del sub_wb["Sheet"]
+        build_summary_sheet(sub_wb, subset_results, now_str, title, suites_str)
+        build_all_tests_sheet(sub_wb, subset_results, title_prefix)
+        build_layer_sheets(sub_wb, subset_results)
+        build_run_commands_sheet(sub_wb)
+        sub_wb.save(str(sub_path))
+        print(f"  ✅ Sub-report saved: {sub_path}")
+        return str(sub_path)
 
-    print("⚙️  Building Summary sheet...")
-    build_summary_sheet(wb, test_results, now_str)
-
-    print("⚙️  Building All Test Cases sheet...")
-    build_all_tests_sheet(wb, test_results)
-
-    print("⚙️  Building per-suite sheets...")
-    build_layer_sheets(wb, test_results)
-
-    print("⚙️  Building Run Commands sheet...")
-    build_run_commands_sheet(wb)
-
-    wb.save(str(full_path))
-    print(f"\n  ✅ Full report: {full_path}")
+    # Save reports
+    functional_report_path = save_sub_report(
+        "medicalappfunctiionality_testing.xlsx",
+        functional_results,
+        "🏥  medicalapptesting Functional & API — Master Test Report",
+        "API · Unit · Functional · Security",
+        "medicalapptesting Functional & API"
+    )
+    selenium_report_path = save_sub_report(
+        "seleniumtesting.xlsx",
+        selenium_results,
+        "🌐  medicalapptesting Selenium Web — Automation Test Report",
+        "Web Page load · Navigation · Forms · CSS · JS",
+        "medicalapptesting Selenium Web"
+    )
+    appium_report_path = save_sub_report(
+        "appiumtesting.xlsx",
+        mobile_results_list,
+        "📱  medicalapptesting Appium Mobile — Automation Test Report",
+        "App launch · Login · Navigation · Upload E2E",
+        "medicalapptesting Appium Mobile"
+    )
 
     # ── Build Issues report (only failures) ────────────────────────────────
     issues_path = None
@@ -822,32 +836,100 @@ def generate_report(
     try:
         summary_md_path = out_dir / "step_summary.md"
         with open(summary_md_path, "w", encoding="utf-8") as f:
-            f.write("## 🏥 medicalapptesting E2E Test Run Summary\n\n")
-            f.write("All E2E web, API, and simulated mobile tests have been run.\n\n")
+            # 🏥 1. Functional & API E2E
+            total_f = len(functional_results)
+            passed_f = sum(1 for r in functional_results if r[5] == "PASS")
+            failed_f = sum(1 for r in functional_results if r[5] == "FAIL")
+            errors_f = sum(1 for r in functional_results if r[5] == "ERROR")
+            skipped_f = sum(1 for r in functional_results if r[5] == "SKIP")
+            pass_rt_f = passed_f / total_f * 100 if total_f else 0.0
+
+            f.write("## 🏥 Functional & API Test Run Summary\n\n")
+            f.write("Functional endpoints, authentication pathways, and data encryption validations.\n\n")
             f.write("### 📊 Execution Statistics:\n")
-            f.write(f"- **Total**: {total}\n")
-            f.write(f"- **Passed**: {passed} (✅)\n")
-            f.write(f"- **Failed**: {failed} (❌)\n")
-            f.write(f"- **Errors**: {errors} (💥)\n")
-            f.write(f"- **Skipped**: {skipped} (⏭)\n")
-            f.write(f"- **Pass Rate**: {passed/total*100:.1f}%\n\n")
+            f.write(f"- **Total**: {total_f}\n")
+            f.write(f"- **Passed**: {passed_f} (✅)\n")
+            f.write(f"- **Failed**: {failed_f} (❌)\n")
+            f.write(f"- **Errors**: {errors_f} (💥)\n")
+            f.write(f"- **Skipped**: {skipped_f} (⏭)\n")
+            f.write(f"- **Pass Rate**: {pass_rt_f:.1f}%\n\n")
             
             f.write("### 📋 Test Case Details:\n")
             f.write("| ID | Test Case Name | Layer | Category | Status | Details |\n")
             f.write("| --- | --- | --- | --- | --- | --- |\n")
-            for r in test_results:
+            for r in functional_results:
                 st_icon = "✅ PASS" if r[5] == "PASS" else ("❌ FAIL" if r[5] == "FAIL" else ("💥 ERROR" if r[5] == "ERROR" else "⏭ SKIP"))
                 f.write(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} | {st_icon} | {r[6]} |\n")
+            f.write("\n---\n\n")
+
+            # 🌐 2. Selenium Web Automation
+            total_s = len(selenium_results)
+            passed_s = sum(1 for r in selenium_results if r[5] == "PASS")
+            failed_s = sum(1 for r in selenium_results if r[5] == "FAIL")
+            errors_s = sum(1 for r in selenium_results if r[5] == "ERROR")
+            skipped_s = sum(1 for r in selenium_results if r[5] == "SKIP")
+            pass_rt_s = passed_s / total_s * 100 if total_s else 0.0
+
+            f.write("## 🌐 Selenium Web Automation Test Run Summary\n\n")
+            f.write("Browser presence, responsive viewports, UI component interaction, and client performance validations.\n\n")
+            f.write("### 📊 Execution Statistics:\n")
+            f.write(f"- **Total**: {total_s}\n")
+            f.write(f"- **Passed**: {passed_s} (✅)\n")
+            f.write(f"- **Failed**: {failed_s} (❌)\n")
+            f.write(f"- **Errors**: {errors_s} (💥)\n")
+            f.write(f"- **Skipped**: {skipped_s} (⏭)\n")
+            f.write(f"- **Pass Rate**: {pass_rt_s:.1f}%\n\n")
+            
+            f.write("### 📋 Test Case Details:\n")
+            f.write("| ID | Test Case Name | Layer | Category | Status | Details |\n")
+            f.write("| --- | --- | --- | --- | --- | --- |\n")
+            for r in selenium_results:
+                st_icon = "✅ PASS" if r[5] == "PASS" else ("❌ FAIL" if r[5] == "FAIL" else ("💥 ERROR" if r[5] == "ERROR" else "⏭ SKIP"))
+                f.write(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} | {st_icon} | {r[6]} |\n")
+            f.write("\n---\n\n")
+
+            # 📱 3. Appium Mobile Automation
+            total_m = len(mobile_results_list)
+            passed_m = sum(1 for r in mobile_results_list if r[5] == "PASS")
+            failed_m = sum(1 for r in mobile_results_list if r[5] == "FAIL")
+            errors_m = sum(1 for r in mobile_results_list if r[5] == "ERROR")
+            skipped_m = sum(1 for r in mobile_results_list if r[5] == "SKIP")
+            pass_rt_m = passed_m / total_m * 100 if total_m else 0.0
+
+            f.write("## 📱 Appium Mobile Automation Test Run Summary\n\n")
+            f.write("Simulated mobile interaction, swipe actions, screen transitions, and platform validations.\n\n")
+            f.write("### 📊 Execution Statistics:\n")
+            f.write(f"- **Total**: {total_m}\n")
+            f.write(f"- **Passed**: {passed_m} (✅)\n")
+            f.write(f"- **Failed**: {failed_m} (❌)\n")
+            f.write(f"- **Errors**: {errors_m} (💥)\n")
+            f.write(f"- **Skipped**: {skipped_m} (⏭)\n")
+            f.write(f"- **Pass Rate**: {pass_rt_m:.1f}%\n\n")
+            
+            f.write("### 📋 Test Case Details:\n")
+            f.write("| ID | Test Case Name | Layer | Category | Status | Details |\n")
+            f.write("| --- | --- | --- | --- | --- | --- |\n")
+            for r in mobile_results_list:
+                st_icon = "✅ PASS" if r[5] == "PASS" else ("❌ FAIL" if r[5] == "FAIL" else ("💥 ERROR" if r[5] == "ERROR" else "⏭ SKIP"))
+                f.write(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} | {st_icon} | {r[6]} |\n")
+
         print(f"  📄 Dynamic step summary written to: {summary_md_path}")
     except Exception as e:
         print(f"  [WARN] Could not write step_summary.md: {e}")
+
+    # Total Stats printout
+    total = len(test_results)
+    passed = sum(1 for r in test_results if r[5] == "PASS")
+    failed = sum(1 for r in test_results if r[5] == "FAIL")
+    errors = sum(1 for r in test_results if r[5] == "ERROR")
+    skipped = sum(1 for r in test_results if r[5] == "SKIP")
 
     print(f"\n{'═'*65}")
     print(f"  📊 Total: {total} | ✅ Passed: {passed} | ❌ Failed: {failed} | ⏭ Skipped: {skipped} | 💥 Errors: {errors}")
     print(f"  🚀 Pass Rate: {passed/total*100:.1f}%")
     print(f"{'═'*65}\n")
 
-    return {"full_report": str(full_path), "issues_report": issues_path}
+    return {"full_report": functional_report_path, "issues_report": issues_path}
 
 
 if __name__ == "__main__":
