@@ -14,8 +14,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { API_HOST } from './api';
 
-const BASE_URL = 'http://10.135.142.53:8000/api/auth';
+const BASE_URL = `${API_HOST}/api/auth`;
 
 export default function ForgotPasswordScreen() {
   const [step, setStep]                       = useState('email'); // 'email' | 'reset'

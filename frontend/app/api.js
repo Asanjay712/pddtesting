@@ -1,9 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// ─── Change this to your machine's local IP when testing on a real device ────
-const BASE_URL   = 'http://10.135.142.53:8000/api/auth';
-const UPLOAD_URL = 'http://10.135.142.53:8000/api/reports/upload';
+// ─── Determine the backend host dynamically (especially for web / CI) ───
+const getApiHost = () => {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return `http://${window.location.hostname}:8000`;
+  }
+  return 'http://10.135.142.53:8000'; // fallback for native devices
+};
+
+export const API_HOST = getApiHost();
+const BASE_URL   = `${API_HOST}/api/auth`;
+const UPLOAD_URL = `${API_HOST}/api/reports/upload`;
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 
@@ -213,7 +221,7 @@ export async function resetPassword({ email, otp, new_password }) {
 
 // ─── Review queue ─────────────────────────────────────────────────────────────
 
-const REVIEW_URL = 'http://10.135.142.53:8000/api';
+const REVIEW_URL = `${API_HOST}/api`;
 
 export async function getPendingReviews(reportId = null) {
   const headers = await authHeaders();
@@ -258,7 +266,7 @@ export async function logout() {
 }
 // ─── Dashboard stats ──────────────────────────────────────────────────────────
 
-const DASHBOARD_URL = 'http://10.135.142.53:8000/api';
+const DASHBOARD_URL = `${API_HOST}/api`;
 
 export async function getDashboardStats() {
   const res = await fetch(`${DASHBOARD_URL}/reports/stats`, { headers: await authHeaders() });

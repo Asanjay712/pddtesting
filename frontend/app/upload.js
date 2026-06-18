@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 import { TabBar } from './dashboard';
-import { getToken, inferMimeType } from './api';   // ← reuse inferMimeType from api.js
+import { getToken, inferMimeType, API_HOST } from './api';   // ← reuse inferMimeType from api.js
 
 const REPORT_TYPES = [
   { key: 'auto',       label: 'Auto-detect',       icon: 'sparkles-outline' },
@@ -19,7 +19,7 @@ const REPORT_TYPES = [
   { key: 'operative',  label: 'Operative Notes',    icon: 'medkit-outline' },
 ];
 
-const BASE_URL = 'http://10.135.142.53:8000/api';
+const BASE_URL = `${API_HOST}/api`;
 
 // ─── Platform-aware FormData file append ─────────────────────────────────────
 //

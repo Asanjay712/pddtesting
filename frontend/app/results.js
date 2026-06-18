@@ -14,9 +14,9 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { getToken } from './api';
+import { getToken, API_HOST } from './api';
 
-const BASE_URL = 'http://10.135.142.53:8000/api';
+const BASE_URL = `${API_HOST}/api`;
 
 
 export default function ResultsScreen() {
