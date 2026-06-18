@@ -462,7 +462,7 @@ def build_summary_sheet(wb, test_results: list, now: str):
 
     # Title
     ws.merge_cells("A1:I1")
-    ws["A1"] = "🏥  PancreaScan Medical AI Platform — Master E2E Test Report"
+    ws["A1"] = "🏥  medicalapptesting Medical AI Platform — Master E2E Test Report"
     ws["A1"].font      = Font(bold=True, color=WHITE, size=18, name="Calibri")
     ws["A1"].fill      = _fill(BLUE_DARK)
     ws["A1"].alignment = _align("center")
@@ -559,7 +559,7 @@ def build_all_tests_sheet(wb, test_results: list):
 
     total = len(test_results)
     ws.merge_cells("A1:H1")
-    ws["A1"] = f"PancreaScan — Complete Test Case Register ({total} Test Cases)"
+    ws["A1"] = f"medicalapptesting — Complete Test Case Register ({total} Test Cases)"
     ws["A1"].font = _font(bold=True, size=14)
     ws["A1"].fill = _fill(BLUE_DARK)
     ws["A1"].alignment = _align("center")
@@ -658,7 +658,7 @@ def build_run_commands_sheet(wb):
     ws.column_dimensions["B"].width = 90
 
     ws.merge_cells("A1:B1")
-    ws["A1"] = "🚀  How to Run — PancreaScan Full Test Suite"
+    ws["A1"] = "🚀  How to Run — medicalapptesting Full Test Suite"
     ws["A1"].font = _font(bold=True, size=14)
     ws["A1"].fill = _fill(BLUE_DARK)
     ws["A1"].alignment = _align("center")
@@ -822,7 +822,7 @@ def generate_report(
     try:
         summary_md_path = out_dir / "step_summary.md"
         with open(summary_md_path, "w", encoding="utf-8") as f:
-            f.write("## 🏥 PancreaScan E2E Test Run Summary\n\n")
+            f.write("## 🏥 medicalapptesting E2E Test Run Summary\n\n")
             f.write("All E2E web, API, and simulated mobile tests have been run.\n\n")
             f.write("### 📊 Execution Statistics:\n")
             f.write(f"- **Total**: {total}\n")

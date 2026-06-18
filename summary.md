@@ -1,6 +1,6 @@
 # 🏥 Medical App Functionality Testing — Master Test Case Register & Summary
 
-This document serves as the master guide and detailed explanation of the **PancreaScan Medical AI Platform** automated test suite. The suite consists of **300 unique test cases** categorized across 6 specific test types. When executed within GitHub Actions, these tests validate the functional integrity, security, performance, accessibility, and deployability of the application.
+This document serves as the master guide and detailed explanation of the **medicalapptesting Medical AI Platform** automated test suite. The suite consists of **300 unique test cases** categorized across 6 specific test types. When executed within GitHub Actions, these tests validate the functional integrity, security, performance, accessibility, and deployability of the application.
 
 ---
 

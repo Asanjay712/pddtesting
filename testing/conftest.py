@@ -146,7 +146,7 @@ def sample_txt(tmp_path_factory):
 def pytest_configure(config):
     config._metadata = getattr(config, "_metadata", {})
     config._metadata.update({
-        "Project":    "PancreaScan / Medical AI Platform",
+        "Project":    "medicalapptesting / Medical AI Platform",
         "Tested By":  "Automation Suite",
         "API Base":   BASE_API,
         "Date":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -159,7 +159,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     error   = len(terminalreporter.stats.get("error",   []))
     skipped = len(terminalreporter.stats.get("skipped", []))
     print(f"\n{'─'*60}")
-    print(f"  PancreaScan Test Summary")
+    print(f"  medicalapptesting Test Summary")
     print(f"  ✅ Passed:  {passed}")
     print(f"  ❌ Failed:  {failed}")
     print(f"  ⚠️  Errors:  {error}")
