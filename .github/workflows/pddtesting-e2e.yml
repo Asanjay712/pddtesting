@@ -93,8 +93,8 @@ jobs:
       - name: 📤 Upload Excel Report as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MedicalAutomation-Analysis-Report
-          path: testing/reports/medicalautomation_analysis.xlsx
+          name: medicalappfunctiionality testing
+          path: testing/reports/medicalappfunctiionality_testing.xlsx
           retention-days: 30
 
       - name: 📝 Post Step Summary

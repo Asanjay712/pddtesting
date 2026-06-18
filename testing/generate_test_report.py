@@ -788,7 +788,7 @@ def generate_report(
     skipped = sum(1 for r in test_results if r[5] == "SKIP")
 
     # ── Build full XLSX report ──────────────────────────────────────────────
-    full_path = out_dir / "medicalautomation_analysis.xlsx"
+    full_path = out_dir / "medicalappfunctiionality_testing.xlsx"
     wb = Workbook()
     if "Sheet" in wb.sheetnames:
         del wb["Sheet"]
