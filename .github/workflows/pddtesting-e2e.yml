@@ -257,6 +257,34 @@ jobs:
           path: testing/reports/appiumtesting.xlsx
           retention-days: 30
 
+      - name: 📤 Upload Backend Security Scan Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: securitytesting report
+          path: testing/reports/securitytesting.xlsx
+          retention-days: 30
+
+      - name: 📤 Upload Security E2E Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security_e2e_testing report
+          path: testing/reports/security_e2e_testing.xlsx
+          retention-days: 30
+
+      - name: 📤 Upload Performance Load Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: performancetesting report
+          path: testing/reports/performancetesting.xlsx
+          retention-days: 30
+
+      - name: 📤 Upload Executive Status Board HTML Dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: Executive Testing Status Board HTML
+          path: testing/reports/test_report.html
+          retention-days: 30
+
       - name: 📝 Post Step Summary
         run: |
           cat testing/reports/step_summary.md >> $GITHUB_STEP_SUMMARY
