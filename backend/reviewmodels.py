@@ -78,4 +78,4 @@ def create_review_table_if_missing(engine):
         from backend.database import engine
         create_review_table_if_missing(engine) 
     """
-    Base.metadata.create_all(bind=engine, checkfirst=True)
+    Base.metadata.create_all(bind=engine, checkfirst=True) 

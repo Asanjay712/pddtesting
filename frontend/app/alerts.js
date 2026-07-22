@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,22 +58,29 @@ export default function AlertsScreen() {
   };
 
   const resolveAlert = async (alertId) => {
+    const doResolve = async () => {
+      try {
+        const token = await getToken();
+        await fetch(`${BASE_URL}/alerts/${alertId}/resolve`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch { /* offline — still update UI */ }
+      setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+    };
+
+    // Alert.alert's button callbacks are unreliable on react-native-web,
+    // so use the browser's native confirm dialog there instead.
+    if (Platform.OS === 'web') {
+      if (window.confirm('Mark this alert as resolved?')) {
+        doResolve();
+      }
+      return;
+    }
+
     Alert.alert('Resolve alert', 'Mark this alert as resolved?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Resolve',
-        style: 'default',
-        onPress: async () => {
-          try {
-            const token = await getToken();
-            await fetch(`${BASE_URL}/alerts/${alertId}/resolve`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${token}` },
-            });
-          } catch { /* offline — still update UI */ }
-          setAlerts((prev) => prev.filter((a) => a.id !== alertId));
-        },
-      },
+      { text: 'Resolve', style: 'default', onPress: doResolve },
     ]);
   };
 

@@ -9,6 +9,7 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -42,16 +43,23 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
+    const doLogout = async () => {
+      await logout();
+      router.replace('/login');
+    };
+
+    // Alert.alert's button callbacks are unreliable on react-native-web,
+    // so use the browser's native confirm dialog there instead.
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to log out?')) {
+        doLogout();
+      }
+      return;
+    }
+
     Alert.alert('Log out', 'Are you sure you want to log out?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log out',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          router.replace('/login');
-        },
-      },
+      { text: 'Log out', style: 'destructive', onPress: doLogout },
     ]);
   };
 

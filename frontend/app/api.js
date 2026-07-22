@@ -264,6 +264,26 @@ export async function logout() {
   await removeToken();
   await AsyncStorage.removeItem('user');
 }
+
+// ─── Delete account ───────────────────────────────────────────────────────────
+
+export async function deleteAccount() {
+  const res = await fetch(`${BASE_URL}/me`, {
+    method:  'DELETE',
+    headers: await authHeaders(),
+  });
+
+  // Some backends return 204 No Content on delete — guard against empty body.
+  let data = {};
+  try { data = await res.json(); } catch { /* no body */ }
+
+  if (!res.ok) throw new Error(data.detail || 'Account deletion failed');
+
+  await removeToken();
+  await AsyncStorage.removeItem('user');
+
+  return data;
+}
 // ─── Dashboard stats ──────────────────────────────────────────────────────────
 
 const DASHBOARD_URL = `${API_HOST}/api`;

@@ -10,16 +10,18 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { getUser, updateProfile } from './api';
+import { getUser, updateProfile, deleteAccount, logout } from './api';
 
 export default function SettingsScreen() {
   const [name, setName]       = useState('');
   const [phone, setPhone]     = useState('');
   const [saving, setSaving]   = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Notification toggles
   const [notifAnalysis, setNotifAnalysis]   = useState(true);
@@ -53,6 +55,40 @@ export default function SettingsScreen() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeleteAccount = () => {
+    const doDelete = async () => {
+      setDeleting(true);
+      try {
+        await deleteAccount();
+        router.replace('/login');
+      } catch (err) {
+        if (Platform.OS === 'web') {
+          window.alert(err.message || 'Could not delete account.');
+        } else {
+          Alert.alert('Error', err.message || 'Could not delete account.');
+        }
+      } finally {
+        setDeleting(false);
+      }
+    };
+
+    const message = 'This will permanently delete your account and all data. This cannot be undone.';
+
+    // Alert.alert's button callbacks are unreliable on react-native-web,
+    // so use the browser's native confirm dialog there instead.
+    if (Platform.OS === 'web') {
+      if (window.confirm(message)) {
+        doDelete();
+      }
+      return;
+    }
+
+    Alert.alert('Delete account', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: doDelete },
+    ]);
   };
 
   return (
@@ -170,21 +206,15 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Danger zone</Text>
         <View style={styles.card}>
           <TouchableOpacity
-            style={styles.dangerRow}
+            style={[styles.dangerRow, deleting && { opacity: 0.6 }]}
             activeOpacity={0.8}
-            onPress={() =>
-              Alert.alert(
-                'Delete account',
-                'This will permanently delete your account and all data. This cannot be undone.',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Delete', style: 'destructive', onPress: () => {} },
-                ]
-              )
-            }
+            onPress={handleDeleteAccount}
+            disabled={deleting}
           >
-            <Ionicons name="trash-outline" size={18} color="#DC2626" />
-            <Text style={styles.dangerText}>Delete account</Text>
+            {deleting
+              ? <ActivityIndicator size="small" color="#DC2626" />
+              : <Ionicons name="trash-outline" size={18} color="#DC2626" />}
+            <Text style={styles.dangerText}>{deleting ? 'Deleting…' : 'Delete account'}</Text>
           </TouchableOpacity>
         </View>
 
