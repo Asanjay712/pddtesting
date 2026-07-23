@@ -232,13 +232,22 @@ def get_ai_code_suggestions(
     # ── Persist each suggestion as a PendingCodeReview ────────────────────────
     pending_ids: List[str] = []
 
+    skipped_no_code: List[str] = []
+
     for item in icd_suggestions:
+        code = item.get("suggested_code")
+        if not code:
+            # AI explicitly found no valid code for this entity (e.g. confidence 0).
+            # Don't insert a row with a null code — just log and skip it.
+            skipped_no_code.append(item.get("entity", "<unknown>"))
+            continue
+
         row = PendingCodeReview(
             id             = str(uuid.uuid4()),
             report_id      = report_id,
             entity         = item.get("entity", ""),
             entity_type    = "diagnosis",
-            suggested_code = item.get("suggested_code", ""),
+            suggested_code = code,
             code_type      = "ICDCode",
             description    = item.get("description", ""),
             confidence     = item.get("confidence", 0),
@@ -249,12 +258,17 @@ def get_ai_code_suggestions(
         pending_ids.append(row.id)
 
     for item in cpt_suggestions:
+        code = item.get("suggested_code")
+        if not code:
+            skipped_no_code.append(item.get("entity", "<unknown>"))
+            continue
+
         row = PendingCodeReview(
             id             = str(uuid.uuid4()),
             report_id      = report_id,
             entity         = item.get("entity", ""),
             entity_type    = "procedure",
-            suggested_code = item.get("suggested_code", ""),
+            suggested_code = code,
             code_type      = item.get("code_type", "CPTCode"),
             description    = item.get("description", ""),
             confidence     = item.get("confidence", 0),
@@ -264,6 +278,12 @@ def get_ai_code_suggestions(
         db.add(row)
         pending_ids.append(row.id)
 
+    if skipped_no_code:
+        logger.info(
+            f"Skipped {len(skipped_no_code)} AI suggestion(s) with no usable code "
+            f"for report {report_id}: {skipped_no_code}"
+        )
+
     db.commit()
     logger.info(f"Saved {len(pending_ids)} PendingCodeReview rows for report {report_id}.")
 
@@ -271,4 +291,4 @@ def get_ai_code_suggestions(
         "icd_suggestions":    icd_suggestions,
         "cpt_suggestions":    cpt_suggestions,
         "pending_review_ids": pending_ids,
-    } 
+    }

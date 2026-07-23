@@ -148,6 +148,20 @@ def approve_review(
 
     final = row.final_code  # uses the property (edited_code or suggested_code)
 
+    # ── Guard: this row must have a real code before it can be approved ────────
+    # Stale rows saved before the AI-fallback fix (or rows the AI genuinely
+    # couldn't code) can have an empty final_code / code_type. Approving those
+    # would fail deep inside neo4j_writer with an unhelpful 500. Catch it here
+    # with a clear message instead, and tell the human to reject or edit it.
+    if not row.entity or not final or not row.code_type:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Review '{row.entity or review_id}' is missing a code and cannot be approved as-is. "
+                f"Either supply edited_code in this request, or reject this review instead."
+            ),
+        )
+
     # ── Push to Neo4j ─────────────────────────────────────────────────────────
     neo4j_result = push_approved_code(
         entity      = row.entity,

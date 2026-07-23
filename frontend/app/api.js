@@ -1,12 +1,31 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// ─── Determine the backend host dynamically (especially for web / CI) ───
+// ─── Determine the backend host ──────────────────────────────────────────────
+//
+// Priority order:
+//   1. EXPO_PUBLIC_API_HOST env var — set this in Vercel (production) and in
+//      a local .env file (development). Must be prefixed EXPO_PUBLIC_ so Expo
+//      inlines it into the web bundle at build time.
+//   2. If running on web and no env var is set, fall back to your deployed
+//      Render backend — NOT window.location.hostname, which only worked when
+//      frontend + backend shared a host (never true on Vercel).
+//   3. If running natively with no env var, fall back to a LAN IP for local
+//      device testing.
+//
+// Render's free tier spins down after inactivity — the first request after
+// idle can take ~50s to respond. That's expected, not a bug.
+const RENDER_BACKEND_URL = 'https://pddtesting.onrender.com';
+const LOCAL_NATIVE_FALLBACK = 'http://10.135.142.53:8000'; // your dev machine's LAN IP
+
 const getApiHost = () => {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return `http://${window.location.hostname}:8000`;
+  if (process.env.EXPO_PUBLIC_API_HOST) {
+    return process.env.EXPO_PUBLIC_API_HOST;
   }
-  return 'http://10.135.142.53:8000'; // fallback for native devices
+  if (Platform.OS === 'web') {
+    return RENDER_BACKEND_URL;
+  }
+  return LOCAL_NATIVE_FALLBACK;
 };
 
 export const API_HOST = getApiHost();

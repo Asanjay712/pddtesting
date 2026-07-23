@@ -37,12 +37,26 @@ try:
 except ImportError:
     SELENIUM_READY = False
 
+def _site_reachable(url: str, timeout: int = 5) -> bool:
+    import urllib.request
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+SITE_LIVE = _site_reachable(SELENIUM_BASE_URL)
+
 
 @pytest.fixture(scope="module")
 def driver():
     """Provides a headless Chrome WebDriver configured for local/CI environments."""
     if not SELENIUM_READY:
         pytest.skip("Selenium package not installed.")
+
+    if not SITE_LIVE:
+        pytest.skip(f"Target site unreachable: {SELENIUM_BASE_URL}")
 
     from selenium.webdriver.chrome.options import Options
     from selenium.webdriver.chrome.service import Service

@@ -410,7 +410,7 @@ async def get_dashboard_stats(
 
     today      = date.today()
     yesterday  = today - timedelta(days=1)
-
+ 
     reports_today     = 0
     reports_yesterday = 0
     codes_found       = 0

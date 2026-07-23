@@ -96,7 +96,7 @@ class PendingCodeReview(Base):
     report_id      = Column(String,   nullable=False, index=True) # FK → reports.id
     entity         = Column(String,   nullable=False)             # "cough"
     entity_type    = Column(String,   nullable=False)             # "diagnosis" | "procedure"
-    suggested_code = Column(String,   nullable=False)             # "R05.9"
+    suggested_code = Column(String,   nullable=True)             # "R05.9"
     edited_code    = Column(String,   nullable=True)              # human override
     code_type      = Column(String,   nullable=False)             # "ICDCode" | "CPTCode" | "HCPCSCode"
     description    = Column(Text,     nullable=True)              # "Cough, unspecified"

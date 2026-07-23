@@ -33,7 +33,7 @@ from selenium.common.exceptions import (
 # ── Target URL ─────────────────────────────────────────────────────────────────
 SELENIUM_BASE_URL = os.getenv(
     "SELENIUM_BASE_URL",
-    "https://tilaksai99.github.io/pddtesting"
+    "https://pddtesting-gpxnq9k79-teamx2411.vercel.app"
 ).rstrip("/")
 
 # ── Reachability gate ──────────────────────────────────────────────────────────

@@ -21,41 +21,32 @@ except ImportError:
     logger.warning("python-docx not installed. Run `pip install python-docx`.")
     HAS_DOCX = False
 
-# ── NER: GLiNER first, then HuggingFace ───────────────────────────────────────
-HAS_GLINER = False
-HAS_TRANSFORMERS = False
-_ner_pipeline = None
-
-def _load_ner_pipeline():
-    global HAS_GLINER, HAS_TRANSFORMERS, _ner_pipeline
-
-    if _ner_pipeline is not None:
-        return _ner_pipeline
-
-    try:
-        from gliner import GLiNER
-        _ner_pipeline = GLiNER.from_pretrained("urchade/gliner_mediumv2.1")
-        HAS_GLINER = True
-        logger.info("GLiNER medical NER loaded (urchade/gliner_mediumv2.1).")
-        return _ner_pipeline
-    except Exception as e:
-        logger.warning(f"GLiNER unavailable ({e}). Trying HuggingFace transformers …")
-
-    try:
-        from transformers import pipeline as hf_pipeline
-        _ner_pipeline = hf_pipeline(
-            "token-classification",
-            model="d4data/biomedical-ner-all",
-            aggregation_strategy="simple",
-        )
-        HAS_TRANSFORMERS = True
-        logger.info("HuggingFace NER loaded (d4data/biomedical-ner-all).")
-        return _ner_pipeline
-    except Exception as e:
-        logger.warning(f"HuggingFace NER unavailable ({e}).")
-
-    return None
-
+# ── Lightweight dictionary/keyword NER (replaces GLiNER / transformers) ──────
+# CHANGE FROM ORIGINAL:
+#   The old pipeline loaded GLiNER ("urchade/gliner_mediumv2.1") or, as a
+#   fallback, a HuggingFace transformer ("d4data/biomedical-ner-all"). Both
+#   need torch + transformer weights resident in memory (roughly 1-2+ GB),
+#   which does not fit inside Render's 512MB free/starter instances.
+#
+#   This version uses `flashtext` (pure Python, Aho-Corasick string matching,
+#   no model weights, a few hundred KB, extremely fast — O(n) over the text
+#   regardless of dictionary size) to match against curated medical term
+#   lists. If flashtext isn't installed, it falls back to plain regex
+#   word-boundary matching (slower, but still zero-model-weight).
+#
+#   Trade-off: this is deterministic dictionary matching, not zero-shot ML
+#   NER — it will only catch terms that are in MEDICAL_TERMS below. It won't
+#   generalize to novel phrasing the way GLiNER could. Extend MEDICAL_TERMS
+#   with more terms any time you find real reports missing entities.
+try:
+    from flashtext import KeywordProcessor
+    HAS_FLASHTEXT = True
+except ImportError:
+    HAS_FLASHTEXT = False
+    logger.warning(
+        "flashtext not installed — falling back to slower regex matching. "
+        "Run `pip install flashtext` (tiny, pure-Python, no ML weights) for best speed."
+    )
 
 # ── Medical abbreviation expansion ────────────────────────────────────────────
 MEDICAL_ABBREVIATIONS = {
@@ -71,35 +62,79 @@ MEDICAL_ABBREVIATIONS = {
     r"\bDOB\b": "Date of Birth",
 }
 
-# ── Label mappings ─────────────────────────────────────────────────────────────
-_GLINER_LABEL_MAP = {
-    "disease":              "DISEASE",
-    "symptom":              "DISEASE",
-    "sign or symptom":      "DISEASE",
-    "medication":           "CHEMICAL",
-    "drug":                 "CHEMICAL",
-    "chemical":             "CHEMICAL",
-    "procedure":            "PROCEDURE",
-    "test":                 "PROCEDURE",
-    "diagnostic":           "PROCEDURE",
-    "diagnostic procedure": "PROCEDURE",
-    "anatomical location":  None,   # skip
-}
-
-_HF_LABEL_MAP = {
-    "B-Disease":     "DISEASE",
-    "I-Disease":     "DISEASE",
-    "B-Chemical":    "CHEMICAL",
-    "I-Chemical":    "CHEMICAL",
-    "B-Gene":        None,
-    "B-Species":     None,
-    "B-DNAMutation": None,
+# ── Curated medical term dictionary ───────────────────────────────────────────
+# Label per category matches what _categorize_entities() below expects.
+# Extend these lists as you discover missing terms in real reports —
+# this is the main lever for recall now that there's no ML model.
+MEDICAL_TERMS: Dict[str, List[str]] = {
+    "SYMPTOM": [
+        "fever", "cough", "headache", "nausea", "vomiting", "dizziness",
+        "fatigue", "chest pain", "shortness of breath", "abdominal pain",
+        "back pain", "sore throat", "diarrhea", "constipation", "rash",
+        "swelling", "chills", "weakness", "numbness", "blurred vision",
+        "palpitations", "loss of appetite", "difficulty breathing",
+        "joint pain", "muscle pain", "night sweats", "weight loss",
+        "confusion", "irritability", "insomnia",
+    ],
+    "DIAGNOSIS": [
+        "hypertension", "diabetes", "diabetes mellitus", "type 2 diabetes",
+        "asthma", "pneumonia", "bronchitis", "covid-19", "influenza",
+        "migraine", "anemia", "obesity", "depression", "anxiety",
+        "arthritis", "osteoarthritis", "rheumatoid arthritis", "copd",
+        "gerd", "hypothyroidism", "hyperthyroidism",
+        "urinary tract infection", "sinusitis", "viral infection",
+        "bacterial infection", "myocardial infarction", "stroke",
+        "sepsis", "chronic kidney disease", "hyperlipidemia",
+        "atrial fibrillation", "congestive heart failure",
+    ],
+    "MEDICATION": [
+        "amoxicillin", "ibuprofen", "acetaminophen", "paracetamol",
+        "metformin", "lisinopril", "atorvastatin", "aspirin",
+        "omeprazole", "albuterol", "insulin", "azithromycin",
+        "prednisone", "levothyroxine", "losartan", "metoprolol",
+        "hydrochlorothiazide", "gabapentin", "sertraline", "warfarin",
+        "amlodipine", "simvastatin", "clopidogrel", "furosemide",
+        "montelukast", "cetirizine", "ciprofloxacin", "doxycycline",
+    ],
+    "PROCEDURE": [
+        "mri brain", "ct scan", "x-ray", "ultrasound", "biopsy",
+        "endoscopy", "colonoscopy", "ecg", "ekg", "echocardiogram",
+        "blood test", "urinalysis", "mammogram", "ct chest",
+        "mri spine", "ct abdomen", "physical therapy", "surgery",
+        "catheterization", "dialysis", "vaccination", "blood transfusion",
+        "chest x-ray", "abdominal ultrasound", "stress test",
+    ],
+    "LAB_FINDING": [
+        "elevated wbc", "high blood sugar", "elevated glucose",
+        "low hemoglobin", "elevated creatinine", "elevated bilirubin",
+        "low platelet count", "elevated troponin", "elevated crp",
+        "abnormal ecg", "elevated cholesterol", "low potassium",
+        "elevated liver enzymes", "elevated hba1c", "low sodium",
+        "elevated white blood cell count", "positive covid test",
+    ],
 }
 
 
 class MedicalReportExtractor:
     def __init__(self):
-        logger.info("MedicalReportExtractor initializing (NER loads on first use).")
+        logger.info("MedicalReportExtractor initializing (lightweight dictionary NER).")
+        self._keyword_processor = self._build_keyword_processor()
+
+    # ------------------------------------------------------------------
+    # Build the flashtext KeywordProcessor once, at construction time.
+    # This is cheap (a dict of a few hundred short strings) — no model
+    # download, no GPU/CPU warm-up, negligible memory (a few hundred KB).
+    # ------------------------------------------------------------------
+    def _build_keyword_processor(self):
+        if not HAS_FLASHTEXT:
+            return None
+        kp = KeywordProcessor(case_sensitive=False)
+        self._term_to_label: Dict[str, str] = {}
+        for label, terms in MEDICAL_TERMS.items():
+            for term in terms:
+                kp.add_keyword(term)
+                self._term_to_label[term.lower()] = label
+        return kp
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -234,7 +269,6 @@ class MedicalReportExtractor:
         text = text.strip()
         if len(text) < 3:
             return False
-        # strip separators and check if what remains is purely numeric
         stripped = _re.sub(r"[\s\-/.,:]", "", text)
         if not stripped or stripped.isdigit():
             return False
@@ -243,76 +277,66 @@ class MedicalReportExtractor:
         return True
 
     # ------------------------------------------------------------------
-    # NER
+    # NER — lightweight dictionary/keyword matching (no model weights)
     # ------------------------------------------------------------------
     def _extract_entities(self, text: str) -> List[Dict[str, Any]]:
-        pipe = _load_ner_pipeline()
+        if HAS_FLASHTEXT and self._keyword_processor is not None:
+            return self._extract_entities_flashtext(text)
+        return self._extract_entities_regex(text)
 
-        if pipe is not None and HAS_GLINER:
-            return self._ner_gliner(pipe, text)
-
-        if pipe is not None and HAS_TRANSFORMERS:
-            return self._ner_transformers(pipe, text)
-
-        # No NER model available — return nothing, not fake data
-        logger.error("No NER model available. Cannot extract entities.")
-        return []
-
-    def _ner_gliner(self, model, text: str) -> List[Dict[str, Any]]:
-        labels = [
-            "disease", "symptom", "medication", "drug",
-            "procedure", "test", "diagnostic procedure",
-        ]
+    def _extract_entities_flashtext(self, text: str) -> List[Dict[str, Any]]:
+        """
+        flashtext.extract_keywords() runs a single Aho-Corasick pass over the
+        text — O(len(text)), independent of dictionary size — and is not
+        sensitive to word count the way a transformer forward pass is. This
+        is the main "process a bit faster" win: no batching, no tokenizer,
+        no model inference, just string scanning.
+        """
         try:
-            raw = model.predict_entities(text, labels, threshold=0.4)
-            logger.info(f"GLiNER raw output: {[(e['text'], e['label'], round(e.get('score',0)*100,1)) for e in raw]}")
-            entities = []
-            for ent in raw:
-                internal = _GLINER_LABEL_MAP.get(ent["label"].lower())
-                if internal is None:
-                    continue
-                if not self._is_valid_entity(ent["text"]):
-                    logger.warning(f"GLiNER: rejected noise entity '{ent['text']}' (label={ent['label']})")
-                    continue
-                entities.append({
-                    "text":             ent["text"],
-                    "label":            internal,
-                    "confidence_score": round(ent.get("score", 0.0) * 100, 2),
-                })
-            logger.info(f"GLiNER extracted {len(entities)} valid entities.")
-            return entities
+            matches = self._keyword_processor.extract_keywords(text)
         except Exception as e:
-            logger.error(f"GLiNER inference failed: {e}")
+            logger.error(f"flashtext extraction failed: {e}")
             return []
 
-    def _ner_transformers(self, pipe, text: str) -> List[Dict[str, Any]]:
-        try:
-            chunk_size = 400
-            words      = text.split()
-            chunks     = [" ".join(words[i:i+chunk_size]) for i in range(0, len(words), chunk_size)]
-            entities   = []
-            seen       = set()
-            for chunk in chunks:
-                raw = pipe(chunk)
-                for ent in raw:
-                    word  = ent.get("word", "").replace("##", "").strip()
-                    label = _HF_LABEL_MAP.get(ent.get("entity_group", ""))
-                    if not label or not word or word in seen:
+        entities = []
+        seen = set()
+        for match in matches:
+            key = match.lower()
+            if key in seen:
+                continue
+            if not self._is_valid_entity(match):
+                continue
+            label = self._term_to_label.get(key)
+            if not label:
+                continue
+            seen.add(key)
+            entities.append({
+                "text":             match.title() if match.islower() else match,
+                "label":            label,
+                "confidence_score": 92.0,  # deterministic dictionary match
+            })
+        logger.info(f"Dictionary NER (flashtext) extracted {len(entities)} entities.")
+        return entities
+
+    def _extract_entities_regex(self, text: str) -> List[Dict[str, Any]]:
+        """Fallback when flashtext isn't installed — plain word-boundary regex."""
+        entities = []
+        seen = set()
+        for label, terms in MEDICAL_TERMS.items():
+            for term in terms:
+                pattern = r"\b" + re.escape(term) + r"\b"
+                if re.search(pattern, text, flags=re.IGNORECASE):
+                    key = term.lower()
+                    if key in seen or not self._is_valid_entity(term):
                         continue
-                    if not self._is_valid_entity(word):
-                        logger.debug(f"HF NER: skipping noise entity '{word}'")
-                        continue
-                    seen.add(word)
+                    seen.add(key)
                     entities.append({
-                        "text":             word,
+                        "text":             term.title(),
                         "label":            label,
-                        "confidence_score": round(ent.get("score", 0.0) * 100, 2),
+                        "confidence_score": 88.0,
                     })
-            logger.info(f"HuggingFace NER extracted {len(entities)} valid entities.")
-            return entities
-        except Exception as e:
-            logger.error(f"HuggingFace NER inference failed: {e}")
-            return []
+        logger.info(f"Dictionary NER (regex fallback) extracted {len(entities)} entities.")
+        return entities
 
     # ------------------------------------------------------------------
     # Categorize
@@ -336,11 +360,11 @@ class MedicalReportExtractor:
             seen.add(text)
             out["confidence_scores"][text] = score
 
-            if label in ("DISEASE", "SYMPTOM"):
+            if label == "SYMPTOM":
                 out["symptoms"].append(text)
             elif label == "DIAGNOSIS":
                 out["diagnosis"].append(text)
-            elif label in ("CHEMICAL", "DRUG"):
+            elif label == "MEDICATION":
                 out["medications"].append(text)
             elif label == "PROCEDURE":
                 out["procedures"].append(text)

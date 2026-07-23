@@ -101,3 +101,6 @@ python-dotenv==1.1.0             # Loads .env for NEO4J_URI, NEO4J_USER, NEO4J_P
 # difflib       — built-in
 # functools     — built-in
 # urllib.parse  — built-in
+
+
+flashtext==2.7

@@ -776,7 +776,7 @@ class TestAdditionalFunctional:
         res = requests.options(
             f"{AUTH_URL}/login",
             headers={
-                "Origin": "https://tilaksai99.github.io",
+                "Origin": "https://pddtesting-gpxnq9k79-teamx2411.vercel.app",
                 "Access-Control-Request-Method": "POST",
             },
             timeout=10,

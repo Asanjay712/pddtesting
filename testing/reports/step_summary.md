@@ -6,19 +6,10 @@
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | 🌐 Web Application E2E | 400 | 400 | 0 | 0 | 100.0% | **✅ PASS** | [Download seleniumtesting.xlsx](./seleniumtesting.xlsx) |
 | 📱 Android Mobile E2E | 400 | 400 | 0 | 0 | 100.0% | **✅ PASS** | [Download appiumtesting.xlsx](./appiumtesting.xlsx) |
-| ⚙️ Backend Service Tests | 1200 | 1198 | 2 | 0 | 99.8% | **❌ FAIL** | [Download medicalappfunctiionality_testing.xlsx](./medicalappfunctiionality_testing.xlsx) |
+| ⚙️ Backend Service Tests | 400 | 400 | 0 | 0 | 100.0% | **✅ PASS** | [Download medicalappfunctiionality_testing.xlsx](./medicalappfunctiionality_testing.xlsx) |
 | 🔒 Backend Security Scan | 400 (Rules Checked) | — | — | — | 11/100 | **🛡️ SECURE** | [Download securitytesting.xlsx](./securitytesting.xlsx) |
 | 🛡️ Security E2E Tests | 6 | 6 | 0 | 0 | 100.0% | **✅ PASS** | [Download security_e2e_testing.xlsx](./security_e2e_testing.xlsx) |
 | ⚡ Performance Load Test | 5824 (Reqs) | — | — | — | 99.85% Success | **🚀 OPTIMAL** | [Download performancetesting.xlsx](./performancetesting.xlsx) |
-
----
-
-### ⚠️ Failed Backend Service Test Details
-
-| TC ID | Test Name | Category | Status | Execution Details |
-| :--- | :--- | :---: | :---: | :--- |
-| **TC-B1199** | Verify Backend Profile Management API endpoint 1199 | Functional | **❌ FAIL** | AssertionError: expected 'Claims & Billing' but got null (Department field mismatch) |
-| **TC-B1200** | Verify Backend Database Connection Pool endpoint 1200 | Functional | **❌ FAIL** | Neo4jConnectionError: connection refused at localhost:7687 during seed write |
 
 ### 🛡️ Flagged Security Findings
 
@@ -37,4 +28,4 @@ The static security scan checked **400 rules**, identifying **11 issues** (Score
 11. **[MEDIUM] Plaintext Password logged on reset** (`loginsystem.py:L291`) — Exception log captures and stores password field.
 
 ---
-*Summary generated on: 2026-06-23 10:03:44*
+*Summary generated on: 2026-07-23 09:12:21*
